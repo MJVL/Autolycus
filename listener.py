@@ -9,12 +9,13 @@ def main():
 
     try:
         capture = pyshark.LiveCapture(interface=args.interface, bpf_filter="tcp")
-        for packet in capture.sniff_continuously(packet_count=1):
-            print(packet.ip)
-            print(packet.data)
-    except Exception:
+        for packet in capture.sniff_continuously():
+            if "Synergy" in packet:
+                # ignore noisy packets (mouse movements, NOPs, keep alives, and unknowns)
+                if len(packet.synergy.field_names) > 0 and not any(field in ("mousemoved", "cnop", "calv", "unknown") for field in packet.synergy.field_names):
+                    packet.synergy.pretty_print()
+    except (EOFError, KeyboardInterrupt):
         print("Exiting...")
-
 
 if __name__ == "__main__":
     main()
