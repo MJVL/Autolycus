@@ -1,2 +1,4 @@
 pyshark
 argparse
+colorlog
+fabulous
