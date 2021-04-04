@@ -5,6 +5,7 @@ import logging
 import time
 from threading import Thread
 from collections import defaultdict
+from textwrap import wrap
 from fabulous import text
 from colorlog import ColoredFormatter
 
@@ -67,9 +68,11 @@ class Autolycus(object):
     SETUP = 6
     DATA = 7
     CONN = 8
+    INFO = 9
 
     # other constants
     KEYSTROKE_WAIT_TIME = 5
+    KEYSTROKE_LINE_LIMIT = 200
 
     def __init__(self, interface):
         self.interface = interface
@@ -114,7 +117,6 @@ class Autolycus(object):
                 elif packet_type == self.PACKET["MOUSE_UP"]:
                     pass
                 elif packet_type == self.PACKET["KEYSTROKE_DOWN"]:
-                    print(packet.synergy)
                     self.handle_keystroke(packet)
                 elif packet_type == self.PACKET["KEYSTROKE_UP"]:
                     pass
@@ -144,7 +146,7 @@ class Autolycus(object):
 
     def handle_keystroke(self, packet):
         if len(self.temp_keystrokes[hash(packet.ip.src + packet.ip.dst) & ((1 << 32) - 1)]) == 0:
-            self.log.log(self.DATA, f"({packet.ip.src} -> {packet.ip.dst}) sending keystrokes, collecting until {self.KEYSTROKE_WAIT_TIME} seconds of inactivity...")
+            self.log.log(self.INFO, f"({packet.ip.src} -> {packet.ip.dst}) sending keystrokes, collecting until {self.KEYSTROKE_WAIT_TIME} seconds of inactivity...")
             Thread(target=self.keystroke_listener, args=(packet.ip.src, packet.ip.dst)).start()
         keycode = int(packet.synergy.keypressed_keyid)
         if keycode in self.SPECIAL_KEYCODES:
@@ -162,7 +164,8 @@ class Autolycus(object):
             else:
                 wait -= 1
             time.sleep(1)
-        self.log.log(self.DATA, f"({src} -> {dst}) collected keystrokes: {''.join(self.temp_keystrokes[hash(src + dst) & ((1 << 32) - 1)])}")
+        self.log.log(self.INFO, f"({src} -> {dst}) collected keystrokes:")
+        [self.log.log(self.DATA, f"\t{batch}") for batch in wrap(''.join(self.temp_keystrokes[hash(src + dst) & ((1 << 32) - 1)]), self.KEYSTROKE_LINE_LIMIT)]
         self.temp_keystrokes[hash(src + dst) & ((1 << 32) - 1)].clear()
 
     def print_banner(self):
@@ -179,6 +182,7 @@ class Autolycus(object):
         logging.addLevelName(self.SETUP, "SETUP")
         logging.addLevelName(self.DATA, "DATA")
         logging.addLevelName(self.CONN, "CONN")
+        logging.addLevelName(self.INFO, "INFO")
         formatter = ColoredFormatter(
             "%(asctime)s | %(log_color)s%(levelname)-5s%(reset)s | %(log_color)s%(reset)s%(message)s",
             datefmt="%H:%M:%S",
