@@ -17,6 +17,10 @@ class Autolycus(object):
         "ACK": "ack", 
         "KEEP_ALIVE": "calv",
         "MOUSE_MOVEMENT": "mousemoved",
+        "MOUSE_DOWN": "mousebuttonpressed",
+        "MOUSE_UP": "mousebuttonreleased",
+        "KEYSTROKE_DOWN": "keypressed",
+        "KEYSTROKE_UP": "keyreleased",
         "NO_OPERATION": "cnop",
         "UNKNOWN": "unknown"
     }
@@ -64,6 +68,14 @@ class Autolycus(object):
                     pass
                 elif packet_type == self.PACKET["MOUSE_MOVEMENT"]:
                     pass
+                elif packet_type == self.PACKET["MOUSE_DOWN"]:
+                    pass
+                elif packet_type == self.PACKET["MOUSE_UP"]:
+                    pass
+                elif packet_type == self.PACKET["KEYSTROKE_DOWN"]:
+                    self.handle_keystroke(packet)
+                elif packet_type == self.PACKET["KEYSTROKE_UP"]:
+                    pass
                 elif len(packet.synergy.field_names) > 0:
                     packet.synergy.pretty_print()
                     print(packet.synergy.field_names)
@@ -87,6 +99,9 @@ class Autolycus(object):
         self.log.log(self.SETUP, f"{packet.ip.src} is confirming server screen settings")
         for field in packet.synergy._get_all_fields_with_alternates()[1:]:
             self.log.log(self.SETUP, f"\t{packet.synergy._get_field_repr(field)}")
+
+    def handle_keystroke(self, packet):
+        self.log.log(self.DATA, f"({packet.ip.src} -> {packet.ip.dst}) sending keystroke: {chr(int(packet.synergy.keypressed_keyid))}")
 
     def print_banner(self):
         BANNER_WIDTH = 115
@@ -119,7 +134,6 @@ class Autolycus(object):
         handler.setFormatter(formatter)
         logger.addHandler(handler)
         logger.setLevel("HDSHK")
-        #sys.stderr = object
         return logger
 
 
