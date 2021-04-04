@@ -11,7 +11,7 @@ from colorlog import ColoredFormatter
 
 
 class Autolycus(object):
-    __slots__ = ["interface", "capture", "log", "active_connections", "temp_keystrokes", "processing_entering", "processing_leaving"]
+    __slots__ = ["interface", "wrap_limit", "keystroke_wait_time", "redundant_wait_time", "capture", "log", "active_connections", "temp_keystrokes", "processing_entering", "processing_leaving"]
 
     # packet type constants
     PACKET = {
@@ -25,6 +25,8 @@ class Autolycus(object):
         "MOUSE_UP": "mousebuttonreleased",
         "KEYSTROKE_DOWN": "keypressed",
         "KEYSTROKE_UP": "keyreleased",
+        "CLIPBOARD": "clipboard",
+        "CLIPBOARD_DATA": "clipboarddata",
         "NO_OPERATION": "cnop",
         "UNKNOWN": "unknown",
         "LEAVING_SCREEN": "cout",
@@ -72,13 +74,11 @@ class Autolycus(object):
     CONN = 8
     INFO = 9
 
-    # other constants
-    KEYSTROKE_WAIT_TIME = 5
-    WRAP_LIMIT = 200
-    REDUNDANT_WAIT_TIME = 1
-
-    def __init__(self, interface):
+    def __init__(self, interface, wrap_limit, keystroke_wait_time, redundant_wait_time):
         self.interface = interface
+        self.wrap_limit = wrap_limit
+        self.keystroke_wait_time = keystroke_wait_time
+        self.redundant_wait_time = redundant_wait_time
         self.capture = capture = pyshark.LiveCapture(interface=interface, bpf_filter="tcp")
         self.log = self.setup_logger()
         self.active_connections = set()
@@ -124,6 +124,11 @@ class Autolycus(object):
                     self.handle_keystroke(packet)
                 elif packet_type == self.PACKET["KEYSTROKE_UP"]:
                     pass
+                elif packet_type == self.PACKET["CLIPBOARD"]:
+                    print(packet.synergy)
+                elif packet_type == self.PACKET["CLIPBOARD_DATA"]:
+                    print(packet.synergy)
+                    print(packet.synergy.clipboarddata_data.binary_value)
                 elif packet_type == self.PACKET["ENTERING_SCREEN"]:
                     self.entering_screen(packet)
                 elif packet_type == self.PACKET["LEAVING_SCREEN"]:
@@ -131,6 +136,7 @@ class Autolycus(object):
                 elif len(packet.synergy.field_names) > 0:
                     packet.synergy.pretty_print()
                     print(packet.synergy.field_names)
+
     
     def handle_handshake(self, packet):
         self.active_connections.add(packet.ip.src)
@@ -154,7 +160,7 @@ class Autolycus(object):
 
     def handle_keystroke(self, packet):
         if len(self.temp_keystrokes[hash(packet.ip.src + packet.ip.dst) & ((1 << 32) - 1)]) == 0:
-            self.log.log(self.INFO, f"({packet.ip.src} -> {packet.ip.dst}) sending keystrokes, collecting until {self.KEYSTROKE_WAIT_TIME} seconds of inactivity...")
+            self.log.log(self.INFO, f"({packet.ip.src} -> {packet.ip.dst}) sending keystrokes, collecting until {self.keystroke_wait_time} seconds of inactivity...")
             Thread(target=self.keystroke_listener, args=(packet.ip.src, packet.ip.dst)).start()
         keycode = int(packet.synergy.keypressed_keyid)
         if keycode in self.SPECIAL_KEYCODES:
@@ -163,17 +169,17 @@ class Autolycus(object):
             self.temp_keystrokes[hash(packet.ip.src + packet.ip.dst) & ((1 << 32) - 1)].append(chr(keycode))
     
     def keystroke_listener(self, src, dst):
-        wait = self.KEYSTROKE_WAIT_TIME
+        wait = self.keystroke_wait_time
         start_size = len(self.temp_keystrokes[hash(src + dst) & ((1 << 32) - 1)])
         while wait > 0:
             if len(self.temp_keystrokes[hash(src + dst) & ((1 << 32) - 1)]) != start_size:
-                wait = self.KEYSTROKE_WAIT_TIME
+                wait = self.keystroke_wait_time
                 start_size = len(self.temp_keystrokes[hash(src + dst) & ((1 << 32) - 1)])
             else:
                 wait -= 1
             time.sleep(1)
         self.log.log(self.INFO, f"({src} -> {dst}) collected keystrokes:")
-        [self.log.log(self.DATA, f"\t{batch}") for batch in wrap(''.join(self.temp_keystrokes[hash(src + dst) & ((1 << 32) - 1)]), self.WRAP_LIMIT)]
+        [self.log.log(self.DATA, f"\t{batch}") for batch in wrap(''.join(self.temp_keystrokes[hash(src + dst) & ((1 << 32) - 1)]), self.wrap_limit)]
         self.temp_keystrokes[hash(src + dst) & ((1 << 32) - 1)].clear()
 
     def entering_screen(self, packet):
@@ -182,7 +188,7 @@ class Autolycus(object):
             Thread(target=self.entering_listener, args=(packet,)).start()
 
     def entering_listener(self, packet):
-        time.sleep(self.REDUNDANT_WAIT_TIME)
+        time.sleep(self.redundant_wait_time)
         self.processing_entering = False
         self.log.log(self.INFO, f"({packet.ip.src} -> {packet.ip.dst}) entering screen")
         self.log.log(self.DATA, f"\tScreen X: {packet.synergy.cinn_x}")
@@ -194,7 +200,7 @@ class Autolycus(object):
             Thread(target=self.leaving_listener, args=(packet,)).start()
 
     def leaving_listener(self, packet):
-        time.sleep(self.REDUNDANT_WAIT_TIME)
+        time.sleep(self.redundant_wait_time)
         self.processing_leaving = False
         self.log.log(self.INFO, f"({packet.ip.src} -> {packet.ip.dst}) leaving screen")
 
@@ -236,10 +242,14 @@ class Autolycus(object):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("interface", help="The interface to listen on.", type=str)
+    parser.add_argument("--wrap_limit", help="The max amount of characters to print on a single line when dumping keystrokes/clipboard data.", type=int, default=200)
+    parser.add_argument("--keystroke_wait_time", help="The time in seconds to wait without hearing new keystrokes before printing the dump.", type=int, default=5)
+    parser.add_argument("--redundant_wait_time", help="The time in seconds to wait before printing actions which commonly contain duplicates. Longer window = less duplicates.", type=int, default=1)
     args = parser.parse_args()
 
-    autolycus = Autolycus(args.interface)
+    autolycus = Autolycus(args.interface, args.wrap_limit, args.keystroke_wait_time, args.redundant_wait_time)
     autolycus.start()
 
+    
 if __name__ == "__main__":
     main()
