@@ -11,7 +11,7 @@ from colorlog import ColoredFormatter
 
 
 class Autolycus(object):
-    __slots__ = ["interface", "capture", "log", "active_connections", "temp_keystrokes"]
+    __slots__ = ["interface", "capture", "log", "active_connections", "temp_keystrokes", "processing_entering", "processing_leaving"]
 
     # packet type constants
     PACKET = {
@@ -26,7 +26,9 @@ class Autolycus(object):
         "KEYSTROKE_DOWN": "keypressed",
         "KEYSTROKE_UP": "keyreleased",
         "NO_OPERATION": "cnop",
-        "UNKNOWN": "unknown"
+        "UNKNOWN": "unknown",
+        "LEAVING_SCREEN": "cout",
+        "ENTERING_SCREEN": "cinn"
     }
 
     # non-ASCII keycodes
@@ -72,7 +74,8 @@ class Autolycus(object):
 
     # other constants
     KEYSTROKE_WAIT_TIME = 5
-    KEYSTROKE_LINE_LIMIT = 200
+    WRAP_LIMIT = 200
+    REDUNDANT_WAIT_TIME = 1
 
     def __init__(self, interface):
         self.interface = interface
@@ -80,6 +83,7 @@ class Autolycus(object):
         self.log = self.setup_logger()
         self.active_connections = set()
         self.temp_keystrokes = defaultdict(list)
+        self.processing_entering = self.processing_leaving = False
 
     def start(self):
         self.print_banner()
@@ -120,6 +124,10 @@ class Autolycus(object):
                     self.handle_keystroke(packet)
                 elif packet_type == self.PACKET["KEYSTROKE_UP"]:
                     pass
+                elif packet_type == self.PACKET["ENTERING_SCREEN"]:
+                    self.entering_screen(packet)
+                elif packet_type == self.PACKET["LEAVING_SCREEN"]:
+                    self.leaving_screen(packet)
                 elif len(packet.synergy.field_names) > 0:
                     packet.synergy.pretty_print()
                     print(packet.synergy.field_names)
@@ -165,8 +173,30 @@ class Autolycus(object):
                 wait -= 1
             time.sleep(1)
         self.log.log(self.INFO, f"({src} -> {dst}) collected keystrokes:")
-        [self.log.log(self.DATA, f"\t{batch}") for batch in wrap(''.join(self.temp_keystrokes[hash(src + dst) & ((1 << 32) - 1)]), self.KEYSTROKE_LINE_LIMIT)]
+        [self.log.log(self.DATA, f"\t{batch}") for batch in wrap(''.join(self.temp_keystrokes[hash(src + dst) & ((1 << 32) - 1)]), self.WRAP_LIMIT)]
         self.temp_keystrokes[hash(src + dst) & ((1 << 32) - 1)].clear()
+
+    def entering_screen(self, packet):
+        if not self.processing_entering:
+            self.processing_entering = True
+            Thread(target=self.entering_listener, args=(packet,)).start()
+
+    def entering_listener(self, packet):
+        time.sleep(self.REDUNDANT_WAIT_TIME)
+        self.processing_entering = False
+        self.log.log(self.INFO, f"({packet.ip.src} -> {packet.ip.dst}) entering screen")
+        self.log.log(self.DATA, f"\tScreen X: {packet.synergy.cinn_x}")
+        self.log.log(self.DATA, f"\tScreen Y: {packet.synergy.cinn_y}")
+
+    def leaving_screen(self, packet):
+        if not self.processing_leaving:
+            self.processing_leaving = True
+            Thread(target=self.leaving_listener, args=(packet,)).start()
+
+    def leaving_listener(self, packet):
+        time.sleep(self.REDUNDANT_WAIT_TIME)
+        self.processing_leaving = False
+        self.log.log(self.INFO, f"({packet.ip.src} -> {packet.ip.dst}) leaving screen")
 
     def print_banner(self):
         BANNER_WIDTH = 115
