@@ -28,6 +28,40 @@ class Autolycus(object):
         "UNKNOWN": "unknown"
     }
 
+    # non-ASCII keycodes
+    SPECIAL_KEYCODES = {
+        61193: "TAB",
+        61192: "BACKSPACE",
+        61197: "ENTER",
+        61211: "ESCAPE",
+        61266: "ARROW UP",
+        61268: "ARROW DOWN",
+        61265: "ARROW LEFT",
+        61267: "ARROW RIGHT",
+        61281: "PRINT SCREEN",
+        61374: "F1",
+        61375: "F2",
+        61376: "F3",
+        61377: "F4",
+        61378: "F5",
+        61379: "F6",
+        61380: "F7",
+        61381: "F8",
+        61382: "F9",
+        61383: "F10",
+        61384: "F11",
+        61385: "F12",
+        61409: "LEFT SHIFT",
+        61410: "RIGHT SHIFT",
+        61411: "LEFT CONTROL",
+        61412: "RIGHT CONTROL",
+        61413: "CAPS LOCK",
+        61417: "LEFT ALT",
+        61418: "RIGHT ALT",
+        61419: "LEFT WINDOWS",
+        61420: "RIGHT WINDOWS"
+    }
+
     # logging constants
     HDSHK = 5
     SETUP = 6
@@ -80,6 +114,7 @@ class Autolycus(object):
                 elif packet_type == self.PACKET["MOUSE_UP"]:
                     pass
                 elif packet_type == self.PACKET["KEYSTROKE_DOWN"]:
+                    print(packet.synergy)
                     self.handle_keystroke(packet)
                 elif packet_type == self.PACKET["KEYSTROKE_UP"]:
                     pass
@@ -111,7 +146,11 @@ class Autolycus(object):
         if len(self.temp_keystrokes[hash(packet.ip.src + packet.ip.dst) & ((1 << 32) - 1)]) == 0:
             self.log.log(self.DATA, f"({packet.ip.src} -> {packet.ip.dst}) sending keystrokes, collecting until {self.KEYSTROKE_WAIT_TIME} seconds of inactivity...")
             Thread(target=self.keystroke_listener, args=(packet.ip.src, packet.ip.dst)).start()
-        self.temp_keystrokes[hash(packet.ip.src + packet.ip.dst) & ((1 << 32) - 1)].append(chr(int(packet.synergy.keypressed_keyid)))
+        keycode = int(packet.synergy.keypressed_keyid)
+        if keycode in self.SPECIAL_KEYCODES:
+            self.temp_keystrokes[hash(packet.ip.src + packet.ip.dst) & ((1 << 32) - 1)].append(f" <{self.SPECIAL_KEYCODES[keycode]}> ")
+        else:
+            self.temp_keystrokes[hash(packet.ip.src + packet.ip.dst) & ((1 << 32) - 1)].append(chr(keycode))
     
     def keystroke_listener(self, src, dst):
         wait = self.KEYSTROKE_WAIT_TIME
@@ -123,7 +162,7 @@ class Autolycus(object):
             else:
                 wait -= 1
             time.sleep(1)
-        self.log.log(self.DATA, f"({src} -> {dst}) collected keystrokes: {' '.join(self.temp_keystrokes[hash(src + dst) & ((1 << 32) - 1)])}")
+        self.log.log(self.DATA, f"({src} -> {dst}) collected keystrokes: {''.join(self.temp_keystrokes[hash(src + dst) & ((1 << 32) - 1)])}")
         self.temp_keystrokes[hash(src + dst) & ((1 << 32) - 1)].clear()
 
     def print_banner(self):
