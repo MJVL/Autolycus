@@ -32,7 +32,8 @@ class Autolycus(object):
         "NO_OPERATION": "cnop",
         "UNKNOWN": "unknown",
         "LEAVING_SCREEN": "cout",
-        "ENTERING_SCREEN": "cinn"
+        "ENTERING_SCREEN": "cinn",
+        "CLOSE_CONNECTION": "cbye"
     }
 
     # non-ASCII keycodes
@@ -75,6 +76,7 @@ class Autolycus(object):
     DATA = 7
     CONN = 8
     INFO = 9
+    CLOSE = 10
 
     def __init__(self, interface, wrap_limit, keystroke_wait_time, redundant_wait_time):
         self.interface = interface
@@ -137,6 +139,8 @@ class Autolycus(object):
                     self.handle_entering_screen(packet)
                 elif packet_type == self.PACKET["LEAVING_SCREEN"]:
                     self.handle_leaving_screen(packet)
+                elif packet_type == self.PACKET["CLOSE_CONNECTION"]:
+                    self.handle_close(packet)
                 elif len(packet.synergy.field_names) > 0:
                     packet.synergy.pretty_print()
                     print(packet.synergy.field_names)
@@ -207,7 +211,7 @@ class Autolycus(object):
             if clipboard and len(clipboard) > 3 and not clipboard[:3].isnumeric() and clipboard != self.temp_clipboard:
                 self.temp_clipboard = clipboard
                 self.log.log(self.INFO, f"{packet.ip.src} -> {packet.ip.dst} transferring clipboard data:")
-                [self.log.log(self.DATA, f"\t{batch}") for batch in wrap(''.join(f"\t{clipboard}"), self.wrap_limit)]
+                [self.log.log(self.DATA, f"\t{batch}") for batch in wrap(''.join(f"{clipboard}"), self.wrap_limit)]
         except UnicodeDecodeError: pass
 
     def handle_entering_screen(self, packet):
@@ -232,6 +236,12 @@ class Autolycus(object):
         self.processing_leaving = False
         self.log.log(self.INFO, f"({packet.ip.src} -> {packet.ip.dst}) leaving screen")
 
+    def handle_close(self, packet):
+        print(self.active_connections)
+        self.log.log(self.CLOSE, f"{packet.ip.src} -> {packet.ip.dst} closing connection")
+        self.active_connections -= {packet.ip.src, packet.ip.dst}
+        print(self.active_connections)
+
     def print_banner(self):
         BANNER_WIDTH = 115
         print("*" * BANNER_WIDTH)
@@ -247,6 +257,7 @@ class Autolycus(object):
         logging.addLevelName(self.DATA, "DATA")
         logging.addLevelName(self.CONN, "CONN")
         logging.addLevelName(self.INFO, "INFO")
+        logging.addLevelName(self.CLOSE, "CLOSE")
         formatter = ColoredFormatter(
             "%(asctime)s | %(log_color)s%(levelname)-5s%(reset)s | %(log_color)s%(reset)s%(message)s",
             datefmt="%H:%M:%S",
@@ -256,7 +267,8 @@ class Autolycus(object):
                 'HDSHK': 'green',
                 'SETUP': 'green',
                 'DATA': 'green',
-                'CONN': 'green'
+                'CONN': 'green',
+                'CLOSE': 'green',
             }
         )
         logger = logging.getLogger('example')
