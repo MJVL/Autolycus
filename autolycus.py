@@ -18,7 +18,9 @@ class Autolycus(object):
     PACKET = {
         "HANDSHAKE": "handshake",
         "QUERY_INFO": "qinf",
-        "CLIENT_DATA": "client_data",
+        "CLIENT_DATA": "clientdata",
+        "SET_OPTIONS": "setoptions",
+        "RESET_OPTIONS": "resetoptions",
         "ACK": "ack", 
         "KEEP_ALIVE": "calv",
         "MOUSE_MOVEMENT": "mousemoved",
@@ -104,7 +106,7 @@ class Autolycus(object):
                 if packet.ip.src not in self.active_connections and packet.ip.dst not in self.active_connections:
                     self.active_connections.add(packet.ip.src)
                     self.active_connections.add(packet.ip.dst)
-                    self.log.log(self.CONN, f"Discovered ongoing session between {packet.ip.dst} <-> {packet.ip.src}")
+                    self.log.log(self.CONN, f"({packet.ip.dst} <-> {packet.ip.src}) discovered ongoing session")
 
                 if packet_type == self.PACKET["HANDSHAKE"]:
                     self.handle_handshake(packet)
@@ -112,6 +114,10 @@ class Autolycus(object):
                     self.handle_query_info(packet)
                 elif packet_type == self.PACKET["CLIENT_DATA"]:
                     self.handle_client_data(packet)
+                elif packet_type == self.PACKET["SET_OPTIONS"]:
+                    pass
+                elif packet_type == self.PACKET["RESET_OPTIONS"]:
+                    pass
                 elif packet_type == self.PACKET["ACK"]:
                     self.handle_ack(packet)
                 elif packet_type == self.PACKET["KEEP_ALIVE"]:
@@ -150,28 +156,28 @@ class Autolycus(object):
 
     def handle_handshake(self, packet):
         self.active_connections.add(packet.ip.src)
-        self.log.log(self.HDSHK, f"{packet.ip.src} is establishing a connection with {packet.ip.dst}")
+        self.log.log(self.HDSHK, f"({packet.ip.src} --> {packet.ip.dst}) establishing connection")
         self.log.log(self.HDSHK, f"\tVersion: Synergy v{packet.synergy.handshake_majorversion}.{packet.synergy.handshake_minorversion}")
         if ({packet.ip.src, packet.ip.dst}.issubset(self.active_connections)):
-            self.log.log(self.HDSHK, f"Connection established between {packet.ip.dst} <-> {packet.ip.src}")
+            self.log.log(self.HDSHK, f"({packet.ip.src} <-> {packet.ip.dst}) connection established")
             self.log.log(self.HDSHK, f"\tServer: {packet.ip.dst}")
             extras = f", hostname: {packet.synergy.handshake_client}" if "handshake_client" in packet.synergy.field_names else ""
             self.log.log(self.HDSHK, f"\tClient: {packet.ip.src}{extras}")
 
     def handle_query_info(self, packet):
-        self.log.log(self.SETUP, f"{packet.ip.src} is requesting screen settings")
+        self.log.log(self.SETUP, f"({packet.ip.src} --> {packet.ip.dst}) requesting screen settings")
 
     def handle_ack(self, packet):
-        self.log.log(self.SETUP, f"{packet.ip.src} has acknowledged the sent settings")
+        self.log.log(self.SETUP, f"({packet.ip.src} --> {packet.ip.dst}) acknowledged sent settings")
 
     def handle_client_data(self, packet):
-        self.log.log(self.SETUP, f"{packet.ip.src} is confirming server screen settings")
+        self.log.log(self.SETUP, f"({packet.ip.src} --> {packet.ip.dst}) confirming server screen settings")
         for field in packet.synergy._get_all_fields_with_alternates()[1:]:
             self.log.log(self.SETUP, f"\t{packet.synergy._get_field_repr(field)}")
 
     def handle_keystroke(self, packet):
         if len(self.temp_keystrokes[packet.ip.src + packet.ip.dst]) == 0:
-            self.log.log(self.INFO, f"({packet.ip.src} -> {packet.ip.dst}) sending keystrokes, collecting until {self.keystroke_wait_time} seconds of inactivity...")
+            self.log.log(self.INFO, f"({packet.ip.src} --> {packet.ip.dst}) sending keystrokes, collecting until {self.keystroke_wait_time} seconds of inactivity...")
             Thread(target=self.keystroke_listener, args=(packet.ip.src, packet.ip.dst)).start()
         multiplier = 1
         if "keyautorepeat" in packet.synergy.field_names:
@@ -194,7 +200,7 @@ class Autolycus(object):
             else:
                 wait -= 1
             time.sleep(1)
-        self.log.log(self.INFO, f"({src} -> {dst}) collected keystrokes:")
+        self.log.log(self.INFO, f"({src} --> {dst}) collected keystrokes:")
         [self.log.log(self.DATA, f"\t{batch}") for batch in wrap(''.join(self.temp_keystrokes[src + dst]), self.wrap_limit)]
         self.temp_keystrokes[src + dst].clear()
 
@@ -206,7 +212,7 @@ class Autolycus(object):
     def clipboard_listener(self, packet):
         time.sleep(self.redundant_wait_time)
         self.processing_leaving = False
-        self.log.log(self.INFO, f"({packet.ip.src} -> {packet.ip.dst}) grabbing clipboard")
+        self.log.log(self.INFO, f"({packet.ip.src} --> {packet.ip.dst}) grabbing clipboard")
 
     def handle_clipboard_data(self, packet):
         try:
@@ -214,7 +220,7 @@ class Autolycus(object):
             clipboard = repr(raw).split("\\x")[-1][3:-1]
             if clipboard and len(clipboard) > 3 and not clipboard[:3].isnumeric() and clipboard != self.temp_clipboard:
                 self.temp_clipboard = clipboard
-                self.log.log(self.INFO, f"{packet.ip.src} -> {packet.ip.dst} transferring clipboard data:")
+                self.log.log(self.INFO, f"({packet.ip.src} --> {packet.ip.dst}) transferring clipboard data:")
                 [self.log.log(self.DATA, f"\t{batch}") for batch in wrap(''.join(f"{clipboard}"), self.wrap_limit)]
         except UnicodeDecodeError: pass
 
@@ -226,7 +232,7 @@ class Autolycus(object):
     def entering_listener(self, packet):
         time.sleep(self.redundant_wait_time)
         self.processing_entering = False
-        self.log.log(self.INFO, f"({packet.ip.src} -> {packet.ip.dst}) entering screen")
+        self.log.log(self.INFO, f"({packet.ip.src} --> {packet.ip.dst}) entering screen")
         self.log.log(self.DATA, f"\tScreen X: {packet.synergy.cinn_x}")
         self.log.log(self.DATA, f"\tScreen Y: {packet.synergy.cinn_y}")
 
@@ -238,14 +244,14 @@ class Autolycus(object):
     def leaving_listener(self, packet):
         time.sleep(self.redundant_wait_time)
         self.processing_leaving = False
-        self.log.log(self.INFO, f"({packet.ip.src} -> {packet.ip.dst}) leaving screen")
+        self.log.log(self.INFO, f"({packet.ip.src} --> {packet.ip.dst}) leaving screen")
 
     def handle_close(self, packet):
-        self.log.log(self.CLOSE, f"{packet.ip.src} -> {packet.ip.dst} closing connection")
+        self.log.log(self.CLOSE, f"({packet.ip.src} --> {packet.ip.dst}) closing connection")
         self.active_connections -= {packet.ip.src, packet.ip.dst}
 
     def handle_busy(self, packet):
-        self.log.log(self.CONN, f"{packet.ip.src} -> {packet.ip.dst} attempting connection to busy recipient")
+        self.log.log(self.CONN, f"({packet.ip.src} --> {packet.ip.dst}) attempting connection to busy recipient")
 
     def print_banner(self):
         BANNER_WIDTH = 115
