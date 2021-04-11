@@ -162,7 +162,7 @@ class Autolycus(object):
             self.log.log(self.SETUP, f"\t{packet.synergy._get_field_repr(field)}")
 
     def handle_keystroke(self, packet):
-        if len(self.temp_keystrokes[hash(packet.ip.src + packet.ip.dst) & ((1 << 32) - 1)]) == 0:
+        if len(self.temp_keystrokes[packet.ip.src + packet.ip.dst]) == 0:
             self.log.log(self.INFO, f"({packet.ip.src} -> {packet.ip.dst}) sending keystrokes, collecting until {self.keystroke_wait_time} seconds of inactivity...")
             Thread(target=self.keystroke_listener, args=(packet.ip.src, packet.ip.dst)).start()
         multiplier = 1
@@ -172,9 +172,9 @@ class Autolycus(object):
         else:
             keycode = int(packet.synergy.keypressed_keyid)
         if keycode in self.SPECIAL_KEYCODES:
-            self.temp_keystrokes[hash(packet.ip.src + packet.ip.dst) & ((1 << 32) - 1)].append(f" <{self.SPECIAL_KEYCODES[keycode] * multiplier}> ")
+            self.temp_keystrokes[packet.ip.src + packet.ip.dst].append(f" <{self.SPECIAL_KEYCODES[keycode] * multiplier}> ")
         else:
-            self.temp_keystrokes[hash(packet.ip.src + packet.ip.dst) & ((1 << 32) - 1)].append(chr(keycode) * multiplier)
+            self.temp_keystrokes[packet.ip.src + packet.ip.dst].append(chr(keycode) * multiplier)
     
     def keystroke_listener(self, src, dst):
         wait = self.keystroke_wait_time
