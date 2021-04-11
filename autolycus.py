@@ -207,7 +207,7 @@ class Autolycus(object):
             if clipboard and len(clipboard) > 3 and not clipboard[:3].isnumeric() and clipboard != self.temp_clipboard:
                 self.temp_clipboard = clipboard
                 self.log.log(self.INFO, f"{packet.ip.src} -> {packet.ip.dst} transferring clipboard data:")
-                self.log.log(self.DATA, f"\t{clipboard}")
+                [self.log.log(self.DATA, f"\t{batch}") for batch in wrap(''.join(f"\t{clipboard}"), self.wrap_limit)]
         except UnicodeDecodeError: pass
 
     def handle_entering_screen(self, packet):
