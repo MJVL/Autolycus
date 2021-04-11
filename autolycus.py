@@ -80,7 +80,7 @@ class Autolycus(object):
         self.wrap_limit = wrap_limit
         self.keystroke_wait_time = keystroke_wait_time
         self.redundant_wait_time = redundant_wait_time
-        self.capture = capture = pyshark.LiveCapture(interface=interface, bpf_filter="tcp")
+        self.capture = pyshark.LiveCapture(interface=interface, bpf_filter="tcp")
         self.log = self.setup_logger()
         self.active_connections = set()
         self.temp_keystrokes = defaultdict(list)
@@ -138,12 +138,11 @@ class Autolycus(object):
                     packet.synergy.pretty_print()
                     print(packet.synergy.field_names)
 
-    
     def handle_handshake(self, packet):
         self.active_connections.add(packet.ip.src)
         self.log.log(self.HDSHK, f"{packet.ip.src} is establishing a connection with {packet.ip.dst}")
         self.log.log(self.HDSHK, f"\tVersion: Synergy v{packet.synergy.handshake_majorversion}.{packet.synergy.handshake_minorversion}")
-        if (set([packet.ip.src, packet.ip.dst]).issubset(self.active_connections)):
+        if ({packet.ip.src, packet.ip.dst}.issubset(self.active_connections)):
             self.log.log(self.HDSHK, f"Connection established between {packet.ip.dst} <-> {packet.ip.src}")
             self.log.log(self.HDSHK, f"\tServer: {packet.ip.dst}")
             self.log.log(self.HDSHK, f"\tClient: {packet.ip.src}, hostname: {packet.synergy.handshake_client}")
@@ -195,13 +194,13 @@ class Autolycus(object):
 
     def handle_clipboard_data(self, packet):
         try:
-            # TODO: avoid duplicates and fix ghost strings
-            clipboard = re.sub(r'[^\x00-\x7f]',r'', packet.synergy.clipboarddata_data.binary_value.decode())
-            if len(clipboard) > 3 and not clipboard[:3].isnumeric() and clipboard != self.temp_clipboard:
+            raw = packet.synergy.get_field("clipboarddata_data").binary_value.decode(encoding="unicode_escape")
+            clipboard = repr(raw).split("\\x")[-1][3:-1]
+            if clipboard and len(clipboard) > 3 and not clipboard[:3].isnumeric() and clipboard != self.temp_clipboard:
                 self.temp_clipboard = clipboard
                 self.log.log(self.INFO, f"{packet.ip.src} -> {packet.ip.dst} transferring clipboard data:")
                 self.log.log(self.DATA, f"\t{clipboard}")
-        except: pass
+        except UnicodeDecodeError: pass
 
     def handle_entering_screen(self, packet):
         if not self.processing_entering:
