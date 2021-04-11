@@ -178,17 +178,17 @@ class Autolycus(object):
     
     def keystroke_listener(self, src, dst):
         wait = self.keystroke_wait_time
-        start_size = len(self.temp_keystrokes[hash(src + dst) & ((1 << 32) - 1)])
+        start_size = len(self.temp_keystrokes[src + dst])
         while wait > 0:
-            if len(self.temp_keystrokes[hash(src + dst) & ((1 << 32) - 1)]) != start_size:
+            if len(self.temp_keystrokes[src + dst]) != start_size:
                 wait = self.keystroke_wait_time
-                start_size = len(self.temp_keystrokes[hash(src + dst) & ((1 << 32) - 1)])
+                start_size = len(self.temp_keystrokes[src + dst])
             else:
                 wait -= 1
             time.sleep(1)
         self.log.log(self.INFO, f"({src} -> {dst}) collected keystrokes:")
-        [self.log.log(self.DATA, f"\t{batch}") for batch in wrap(''.join(self.temp_keystrokes[hash(src + dst) & ((1 << 32) - 1)]), self.wrap_limit)]
-        self.temp_keystrokes[hash(src + dst) & ((1 << 32) - 1)].clear()
+        [self.log.log(self.DATA, f"\t{batch}") for batch in wrap(''.join(self.temp_keystrokes[src + dst]), self.wrap_limit)]
+        self.temp_keystrokes[src + dst].clear()
 
     def handle_clipboard(self, packet):
         if not self.processing_clipboard:
