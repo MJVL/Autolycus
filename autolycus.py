@@ -26,6 +26,7 @@ class Autolycus(object):
         "MOUSE_UP": "mousebuttonreleased",
         "KEYSTROKE_DOWN": "keypressed",
         "KEYSTROKE_UP": "keyreleased",
+        "KEYSTROKE_REPEAT": "keyautorepeat",
         "CLIPBOARD": "clipboard",
         "CLIPBOARD_DATA": "clipboarddata",
         "NO_OPERATION": "cnop",
@@ -126,6 +127,8 @@ class Autolycus(object):
                     self.handle_keystroke(packet)
                 elif packet_type == self.PACKET["KEYSTROKE_UP"]:
                     pass
+                elif packet_type == self.PACKET["KEYSTROKE_REPEAT"]:
+                    self.handle_keystroke(packet)
                 elif packet_type == self.PACKET["CLIPBOARD"]:
                     self.handle_clipboard(packet)
                 elif packet_type == self.PACKET["CLIPBOARD_DATA"]:
@@ -162,11 +165,16 @@ class Autolycus(object):
         if len(self.temp_keystrokes[hash(packet.ip.src + packet.ip.dst) & ((1 << 32) - 1)]) == 0:
             self.log.log(self.INFO, f"({packet.ip.src} -> {packet.ip.dst}) sending keystrokes, collecting until {self.keystroke_wait_time} seconds of inactivity...")
             Thread(target=self.keystroke_listener, args=(packet.ip.src, packet.ip.dst)).start()
-        keycode = int(packet.synergy.keypressed_keyid)
-        if keycode in self.SPECIAL_KEYCODES:
-            self.temp_keystrokes[hash(packet.ip.src + packet.ip.dst) & ((1 << 32) - 1)].append(f" <{self.SPECIAL_KEYCODES[keycode]}> ")
+        multiplier = 1
+        if "keyautorepeat" in packet.synergy.field_names:
+            keycode = int(packet.synergy.keyautorepeat_keyid)
+            multiplier = int(packet.synergy.keyautorepeat_repeat)
         else:
-            self.temp_keystrokes[hash(packet.ip.src + packet.ip.dst) & ((1 << 32) - 1)].append(chr(keycode))
+            keycode = int(packet.synergy.keypressed_keyid)
+        if keycode in self.SPECIAL_KEYCODES:
+            self.temp_keystrokes[hash(packet.ip.src + packet.ip.dst) & ((1 << 32) - 1)].append(f" <{self.SPECIAL_KEYCODES[keycode] * multiplier}> ")
+        else:
+            self.temp_keystrokes[hash(packet.ip.src + packet.ip.dst) & ((1 << 32) - 1)].append(chr(keycode) * multiplier)
     
     def keystroke_listener(self, src, dst):
         wait = self.keystroke_wait_time
