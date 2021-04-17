@@ -13,7 +13,7 @@ from contextlib import suppress
 
 
 class Autolycus(object):
-    __slots__ = ["interface", "wrap_limit", "keystroke_wait_time", "redundant_wait_time", "verbose_level", "capture", "log", "active_connections", "temp_keystrokes", "temp_clipboard", "processing_clipboard", "processing_entering", "processing_leaving", "processing_keep_alive", "processing_nop"]
+    __slots__ = ["interface", "wrap_limit", "keystroke_wait_time", "redundant_wait_time", "verbose_level", "capture", "log", "active_connections", "temp_keystrokes", "temp_clipboard", "processing_clipboard", "processing_entering", "processing_leaving", "processing_keep_alive", "processing_unknown", "processing_nop"]
 
     # packet type constants
     PACKET = {
@@ -99,7 +99,7 @@ class Autolycus(object):
         self.active_connections = set()
         self.temp_keystrokes = defaultdict(list)
         self.temp_clipboard = ""
-        self.processing_clipboard = self.processing_entering = self.processing_leaving = self.processing_keep_alive = self.processing_nop = False
+        self.processing_clipboard = self.processing_entering = self.processing_leaving = self.processing_keep_alive = self.processing_unknown = self.processing_nop = False
 
     def start(self):
         self.print_banner()
@@ -159,7 +159,7 @@ class Autolycus(object):
                         elif packet_type == self.PACKET["KEEP_ALIVE"]:
                             self.handle_keep_alive(packet)
                         elif packet_type == self.PACKET["UNKNOWN"]:
-                            pass
+                            self.handle_unknown(packet)
                     if self.verbose_level >= 3:
                         if packet_type == self.PACKET["MOUSE_MOVEMENT"]:
                             self.handle_mouse_movement(packet)
@@ -274,8 +274,7 @@ class Autolycus(object):
 
     def handle_set_options(self, packet):
         self.log.log(self.INFO, f"({packet.ip.src} --> {packet.ip.dst}) set options:")
-        self.log.log(self.DATA, f"\t {packet.synergy.setoptions}")
-
+        self.log.log(self.DATA, f"\t {packet.synergy.setoptions}")\
 
     def handle_reset_options(self, packet):
         self.log.log(self.INFO, f"({packet.ip.src} --> {packet.ip.dst}) reset options")
@@ -289,6 +288,16 @@ class Autolycus(object):
         time.sleep(self.redundant_wait_time)
         self.processing_keep_alive = False
         self.log.log(self.INFO, f"({packet.ip.src} --> {packet.ip.dst}) keep alive")
+
+    def handle_unknown(self, packet):
+         if not self.processing_unknown:
+            self.processing_unknown = True
+            Thread(target=self.unknown_listener, args=(packet,)).start()
+
+    def unknown_listener(self, packet):
+        time.sleep(self.redundant_wait_time)
+        self.processing_unknown = False
+        self.log.log(self.INFO, f"({packet.ip.src} --> {packet.ip.dst}) unknown")
 
     def handle_nop(self, packet):
         if not self.processing_nop:
