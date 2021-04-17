@@ -9,6 +9,7 @@ from collections import defaultdict
 from textwrap import wrap
 from fabulous import text
 from colorlog import ColoredFormatter
+from contextlib import suppress
 
 
 class Autolycus(object):
@@ -37,6 +38,32 @@ class Autolycus(object):
         "ENTERING_SCREEN": "cinn",
         "CLOSE_CONNECTION": "cbye",
         "CONNECTION_BUSY": "ebsy"
+    }
+
+    # corresponding verbosity level, higher = noisier
+    # default = 0, ignore completely = 3
+    VERBOSITY = {
+        "HANDSHAKE": 0,
+        "QUERY_INFO": 0,
+        "CLIENT_DATA": 0,
+        "SET_OPTIONS": 2,
+        "RESET_OPTIONS": 2,
+        "ACK": 0,
+        "KEEP_ALIVE": 2,
+        "MOUSE_MOVEMENT": 1,
+        "MOUSE_DOWN": 1,
+        "MOUSE_UP": 1,
+        "KEYSTROKE_DOWN": 0,
+        "KEYSTROKE_UP": 3,
+        "KEYSTROKE_REPEAT": 0,
+        "CLIPBOARD": 0,
+        "CLIPBOARD_DATA": 0,
+        "NO_OPERATION": 2,
+        "UNKNOWN": 2,
+        "LEAVING_SCREEN": 0,
+        "ENTERING_SCREEN": 0,
+        "CLOSE_CONNECTION": 0,
+        "CONNECTION_BUSY": 0
     }
 
     # non-ASCII keycodes
@@ -289,17 +316,18 @@ class Autolycus(object):
         logger.setLevel("HDSHK")
         return logger
 
+
 def main():
-    parser = argparse.ArgumentParser(description="A proof of concept keylogger for the Synergy protocol.")
+    parser = argparse.ArgumentParser(description="A proof of concept keylogger for the Synergy protocol.", formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument("interface", help="The interface to listen on.", type=str)
     parser.add_argument("-w", "--wrap_limit", help="The max amount of characters to print on a single line when dumping keystrokes/clipboard data.", type=int, default=200)
     parser.add_argument("-k", "--keystroke_wait_time", help="The time in seconds to wait without hearing new keystrokes before printing the dump.", type=int, default=5)
     parser.add_argument("-r", "--redundant_wait_time", help="The time in seconds to wait before printing actions which commonly contain duplicates. Longer window = less duplicates.", type=int, default=1)
+    parser.add_argument("-v", "--verbose", help="The level of verbosity, with each level adding more. Default = 0.\n0: keystrokes, clipboards, connection, and screen movement\n1: mouse movements and clicks\n2: keep alives, NOPs, unknowns, and random noisy packets")
     args = parser.parse_args()
 
     autolycus = Autolycus(args.interface, args.wrap_limit, args.keystroke_wait_time, args.redundant_wait_time)
     autolycus.start()
 
-    
 if __name__ == "__main__":
     main()
