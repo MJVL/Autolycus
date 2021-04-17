@@ -273,12 +273,12 @@ class Autolycus(object):
         self.log.log(self.DATA, f"\t<{self.MOUSE_CODES[int(packet.synergy.mousebuttonpressed)]}>")
 
     def handle_set_options(self, packet):
-        print(packet.synergy)
-        print(packet.synergy.field_names)
+        self.log.log(self.INFO, f"({packet.ip.src} --> {packet.ip.dst}) set options:")
+        self.log.log(self.DATA, f"\t {packet.synergy.setoptions}")
 
-    def handle_reset_option(self, packet):
-        print(packet.synergy)
-        print(packet.synergy.field_names)
+
+    def handle_reset_options(self, packet):
+        self.log.log(self.INFO, f"({packet.ip.src} --> {packet.ip.dst}) reset options")
 
     def handle_keep_alive(self, packet):
         if not self.processing_keep_alive:
