@@ -355,7 +355,7 @@ class Autolycus(object):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="A proof of concept keylogger for the Synergy protocol.", formatter_class=argparse.RawTextHelpFormatter)
+    parser = argparse.ArgumentParser(description="A proof of concept keylogger for the Synergy application/protocol.", formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument("interface", help="The interface to listen on.", type=str)
     parser.add_argument("-w", "--wrap_limit", help="The max amount of characters to print on a single line when dumping keystrokes/clipboard data.", metavar="num chars", type=int, default=200)
     parser.add_argument("-k", "--keystroke_wait_time", help="The time in seconds to wait without hearing new keystrokes before printing the dump.", metavar="seconds", type=int, default=5)
@@ -365,6 +365,7 @@ def main():
 
     autolycus = Autolycus(args.interface, args.wrap_limit, args.keystroke_wait_time, args.redundant_wait_time, args.verbose)
     autolycus.start()
+
 
 if __name__ == "__main__":
     main()
