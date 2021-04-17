@@ -13,7 +13,7 @@ from contextlib import suppress
 
 
 class Autolycus(object):
-    __slots__ = ["interface", "wrap_limit", "keystroke_wait_time", "redundant_wait_time", "verbose_level", "capture", "log", "active_connections", "temp_keystrokes", "temp_clipboard", "processing_clipboard", "processing_entering", "processing_leaving"]
+    __slots__ = ["interface", "wrap_limit", "keystroke_wait_time", "redundant_wait_time", "verbose_level", "capture", "log", "active_connections", "temp_keystrokes", "temp_clipboard", "processing_clipboard", "processing_entering", "processing_leaving", "processing_keep_alive", "processing_nop"]
 
     # packet type constants
     PACKET = {
@@ -99,7 +99,7 @@ class Autolycus(object):
         self.active_connections = set()
         self.temp_keystrokes = defaultdict(list)
         self.temp_clipboard = ""
-        self.processing_clipboard = self.processing_entering = self.processing_leaving = False
+        self.processing_clipboard = self.processing_entering = self.processing_leaving = self.processing_keep_alive = self.processing_nop = False
 
     def start(self):
         self.print_banner()
@@ -150,20 +150,21 @@ class Autolycus(object):
                             self.handle_mouse_down(packet)
                         elif packet_type == self.PACKET["MOUSE_UP"]:
                             # redundant packet, catch and ignore
+                            pass
                     if self.verbose_level >= 2:
                         if packet_type == self.PACKET["SET_OPTIONS"]:
-                            pass
+                            self.handle_set_options(packet)
                         elif packet_type == self.PACKET["RESET_OPTIONS"]:
-                            pass
+                            self.handle_reset_options(packet)
                         elif packet_type == self.PACKET["KEEP_ALIVE"]:
-                            pass
-                        elif packet_type == self.PACKET["NO_OPERATION"]:
-                            pass
+                            self.handle_keep_alive(packet)
                         elif packet_type == self.PACKET["UNKNOWN"]:
                             pass
                     if self.verbose_level >= 3:
                         if packet_type == self.PACKET["MOUSE_MOVEMENT"]:
                             self.handle_mouse_movement(packet)
+                        elif packet_type == self.PACKET["NO_OPERATION"]:
+                            self.handle_nop(packet)
                 elif self.verbose_level >= 4 and len(packet.synergy.field_names) > 0:
                     packet.synergy.pretty_print()
                     print(packet.synergy.field_names)
@@ -271,6 +272,34 @@ class Autolycus(object):
         self.log.log(self.INFO, f"({packet.ip.src} --> {packet.ip.dst}) mouse action:")
         self.log.log(self.DATA, f"\t<{self.MOUSE_CODES[int(packet.synergy.mousebuttonpressed)]}>")
 
+    def handle_set_options(self, packet):
+        print(packet.synergy)
+        print(packet.synergy.field_names)
+
+    def handle_reset_option(self, packet):
+        print(packet.synergy)
+        print(packet.synergy.field_names)
+
+    def handle_keep_alive(self, packet):
+        if not self.processing_keep_alive:
+            self.processing_keep_alive = True
+            Thread(target=self.keep_alive_listener, args=(packet,)).start()
+
+    def keep_alive_listener(self, packet):
+        time.sleep(self.redundant_wait_time)
+        self.processing_keep_alive = False
+        self.log.log(self.INFO, f"({packet.ip.src} --> {packet.ip.dst}) keep alive")
+
+    def handle_nop(self, packet):
+        if not self.processing_nop:
+            self.processing_nop = True
+            Thread(target=self.nop_listener, args=(packet,)).start()
+
+    def nop_listener(self, packet):
+        time.sleep(self.redundant_wait_time)
+        self.processing_nop = False
+        self.log.log(self.INFO, f"({packet.ip.src} --> {packet.ip.dst}) no operation (NOP)")
+    
     def handle_mouse_movement(self, packet):
         self.log.log(self.INFO, f"({packet.ip.src} --> {packet.ip.dst}) mouse movement:")
         self.log.log(self.DATA, f"\tx: {packet.synergy.mousemoved_x}, y: {packet.synergy.mousemoved_y}")
@@ -318,7 +347,7 @@ def main():
     parser.add_argument("-w", "--wrap_limit", help="The max amount of characters to print on a single line when dumping keystrokes/clipboard data.", type=int, default=200)
     parser.add_argument("-k", "--keystroke_wait_time", help="The time in seconds to wait without hearing new keystrokes before printing the dump.", type=int, default=5)
     parser.add_argument("-r", "--redundant_wait_time", help="The time in seconds to wait before printing actions which commonly contain duplicates. Longer window = less duplicates.", type=int, default=1)
-    parser.add_argument("-v", "--verbose", help="The level of verbosity, with each level adding more. Default = 0.\n0: keystrokes, clipboards, connection, and screen movement\n1: mouse clicks\n2: keep alives, NOPs, unknowns, and random noisy packets\n3:mouse movement\n4: any uncaught packets", type=int, default=0)
+    parser.add_argument("-v", "--verbose", help="The level of verbosity, with each level adding more. Default = 0.\n0: keystrokes, clipboards, connection, and screen movement\n1: mouse clicks\n2: options, keep alives, unknowns, and random noisy packets\n3:mouse movement and NOPs\n4: any uncaught packets", type=int, default=0)
     args = parser.parse_args()
 
     autolycus = Autolycus(args.interface, args.wrap_limit, args.keystroke_wait_time, args.redundant_wait_time, args.verbose)
