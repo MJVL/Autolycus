@@ -74,6 +74,12 @@ class Autolycus(object):
         61420: "RIGHT WINDOWS"
     }
 
+    # mouse actions (possibly platform-dependent)
+    MOUSE_CODES = {
+        68: "CLICK",
+        17485: "SCROLL WHEEL"
+    }
+
     # logging constants
     HDSHK = 5
     SETUP = 6
@@ -123,7 +129,7 @@ class Autolycus(object):
                         elif packet_type == self.PACKET["KEYSTROKE_DOWN"]:
                             self.handle_keystroke(packet)
                         elif packet_type == self.PACKET["KEYSTROKE_UP"]:
-                            # useless packet, catch and ignore
+                            # redundant packet, catch and ignore
                             pass
                         elif packet_type == self.PACKET["KEYSTROKE_REPEAT"]:
                             self.handle_keystroke(packet)
@@ -140,12 +146,10 @@ class Autolycus(object):
                         elif packet_type == self.PACKET["CONNECTION_BUSY"]:
                             self.handle_busy(packet)
                     if self.verbose_level >= 1:
-                        if packet_type == self.PACKET["MOUSE_MOVEMENT"]:
-                            pass
-                        elif packet_type == self.PACKET["MOUSE_DOWN"]:
-                            pass
+                        if packet_type == self.PACKET["MOUSE_DOWN"]:
+                            self.handle_mouse_down(packet)
                         elif packet_type == self.PACKET["MOUSE_UP"]:
-                            pass    
+                            # redundant packet, catch and ignore
                     if self.verbose_level >= 2:
                         if packet_type == self.PACKET["SET_OPTIONS"]:
                             pass
@@ -157,7 +161,10 @@ class Autolycus(object):
                             pass
                         elif packet_type == self.PACKET["UNKNOWN"]:
                             pass
-                elif self.verbose_level >= 3 and len(packet.synergy.field_names) > 0:
+                    if self.verbose_level >= 3:
+                        if packet_type == self.PACKET["MOUSE_MOVEMENT"]:
+                            self.handle_mouse_movement(packet)
+                elif self.verbose_level >= 4 and len(packet.synergy.field_names) > 0:
                     packet.synergy.pretty_print()
                     print(packet.synergy.field_names)
 
@@ -260,6 +267,14 @@ class Autolycus(object):
     def handle_busy(self, packet):
         self.log.log(self.CONN, f"({packet.ip.src} --> {packet.ip.dst}) attempting connection to busy recipient")
 
+    def handle_mouse_down(self, packet):
+        self.log.log(self.INFO, f"({packet.ip.src} --> {packet.ip.dst}) mouse action:")
+        self.log.log(self.DATA, f"\t<{self.MOUSE_CODES[int(packet.synergy.mousebuttonpressed)]}>")
+
+    def handle_mouse_movement(self, packet):
+        self.log.log(self.INFO, f"({packet.ip.src} --> {packet.ip.dst}) mouse movement:")
+        self.log.log(self.DATA, f"\tx: {packet.synergy.mousemoved_x}, y: {packet.synergy.mousemoved_y}")
+
     def print_banner(self):
         BANNER_WIDTH = 115
         print("*" * BANNER_WIDTH)
@@ -303,7 +318,7 @@ def main():
     parser.add_argument("-w", "--wrap_limit", help="The max amount of characters to print on a single line when dumping keystrokes/clipboard data.", type=int, default=200)
     parser.add_argument("-k", "--keystroke_wait_time", help="The time in seconds to wait without hearing new keystrokes before printing the dump.", type=int, default=5)
     parser.add_argument("-r", "--redundant_wait_time", help="The time in seconds to wait before printing actions which commonly contain duplicates. Longer window = less duplicates.", type=int, default=1)
-    parser.add_argument("-v", "--verbose", help="The level of verbosity, with each level adding more. Default = 0.\n0: keystrokes, clipboards, connection, and screen movement\n1: mouse movements and clicks\n2: keep alives, NOPs, unknowns, and random noisy packets\n3: any uncaught packets", type=int, default=0)
+    parser.add_argument("-v", "--verbose", help="The level of verbosity, with each level adding more. Default = 0.\n0: keystrokes, clipboards, connection, and screen movement\n1: mouse clicks\n2: keep alives, NOPs, unknowns, and random noisy packets\n3:mouse movement\n4: any uncaught packets", type=int, default=0)
     args = parser.parse_args()
 
     autolycus = Autolycus(args.interface, args.wrap_limit, args.keystroke_wait_time, args.redundant_wait_time, args.verbose)
