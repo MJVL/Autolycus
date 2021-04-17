@@ -13,7 +13,7 @@ from contextlib import suppress
 
 
 class Autolycus(object):
-    __slots__ = ["interface", "wrap_limit", "keystroke_wait_time", "redundant_wait_time", "capture", "log", "active_connections", "temp_keystrokes", "temp_clipboard", "processing_clipboard", "processing_entering", "processing_leaving"]
+    __slots__ = ["interface", "wrap_limit", "keystroke_wait_time", "redundant_wait_time", "verbose_level", "capture", "log", "active_connections", "temp_keystrokes", "temp_clipboard", "processing_clipboard", "processing_entering", "processing_leaving"]
 
     # packet type constants
     PACKET = {
@@ -38,32 +38,6 @@ class Autolycus(object):
         "ENTERING_SCREEN": "cinn",
         "CLOSE_CONNECTION": "cbye",
         "CONNECTION_BUSY": "ebsy"
-    }
-
-    # corresponding verbosity level, higher = noisier
-    # default = 0, ignore completely = 3
-    VERBOSITY = {
-        "HANDSHAKE": 0,
-        "QUERY_INFO": 0,
-        "CLIENT_DATA": 0,
-        "SET_OPTIONS": 2,
-        "RESET_OPTIONS": 2,
-        "ACK": 0,
-        "KEEP_ALIVE": 2,
-        "MOUSE_MOVEMENT": 1,
-        "MOUSE_DOWN": 1,
-        "MOUSE_UP": 1,
-        "KEYSTROKE_DOWN": 0,
-        "KEYSTROKE_UP": 3,
-        "KEYSTROKE_REPEAT": 0,
-        "CLIPBOARD": 0,
-        "CLIPBOARD_DATA": 0,
-        "NO_OPERATION": 2,
-        "UNKNOWN": 2,
-        "LEAVING_SCREEN": 0,
-        "ENTERING_SCREEN": 0,
-        "CLOSE_CONNECTION": 0,
-        "CONNECTION_BUSY": 0
     }
 
     # non-ASCII keycodes
@@ -108,11 +82,12 @@ class Autolycus(object):
     INFO = 9
     CLOSE = 10
 
-    def __init__(self, interface, wrap_limit, keystroke_wait_time, redundant_wait_time):
+    def __init__(self, interface, wrap_limit, keystroke_wait_time, redundant_wait_time, verbose_level):
         self.interface = interface
         self.wrap_limit = wrap_limit
         self.keystroke_wait_time = keystroke_wait_time
         self.redundant_wait_time = redundant_wait_time
+        self.verbose_level = verbose_level
         self.capture = pyshark.LiveCapture(interface=interface, bpf_filter="tcp")
         self.log = self.setup_logger()
         self.active_connections = set()
@@ -135,49 +110,54 @@ class Autolycus(object):
                     self.active_connections.add(packet.ip.dst)
                     self.log.log(self.CONN, f"({packet.ip.dst} <-> {packet.ip.src}) discovered ongoing session")
 
-                if packet_type == self.PACKET["HANDSHAKE"]:
-                    self.handle_handshake(packet)
-                elif packet_type == self.PACKET["QUERY_INFO"]:
-                    self.handle_query_info(packet)
-                elif packet_type == self.PACKET["CLIENT_DATA"]:
-                    self.handle_client_data(packet)
-                elif packet_type == self.PACKET["SET_OPTIONS"]:
-                    pass
-                elif packet_type == self.PACKET["RESET_OPTIONS"]:
-                    pass
-                elif packet_type == self.PACKET["ACK"]:
-                    self.handle_ack(packet)
-                elif packet_type == self.PACKET["KEEP_ALIVE"]:
-                    pass
-                elif packet_type == self.PACKET["NO_OPERATION"]:
-                    pass
-                elif packet_type == self.PACKET["UNKNOWN"]:
-                    pass
-                elif packet_type == self.PACKET["MOUSE_MOVEMENT"]:
-                    pass
-                elif packet_type == self.PACKET["MOUSE_DOWN"]:
-                    pass
-                elif packet_type == self.PACKET["MOUSE_UP"]:
-                    pass
-                elif packet_type == self.PACKET["KEYSTROKE_DOWN"]:
-                    self.handle_keystroke(packet)
-                elif packet_type == self.PACKET["KEYSTROKE_UP"]:
-                    pass
-                elif packet_type == self.PACKET["KEYSTROKE_REPEAT"]:
-                    self.handle_keystroke(packet)
-                elif packet_type == self.PACKET["CLIPBOARD"]:
-                    self.handle_clipboard(packet)
-                elif packet_type == self.PACKET["CLIPBOARD_DATA"]:
-                    self.handle_clipboard_data(packet)
-                elif packet_type == self.PACKET["ENTERING_SCREEN"]:
-                    self.handle_entering_screen(packet)
-                elif packet_type == self.PACKET["LEAVING_SCREEN"]:
-                    self.handle_leaving_screen(packet)
-                elif packet_type == self.PACKET["CLOSE_CONNECTION"]:
-                    self.handle_close(packet)
-                elif packet_type == self.PACKET["CONNECTION_BUSY"]:
-                    self.handle_busy(packet)
-                elif len(packet.synergy.field_names) > 0:
+                if packet_type in self.PACKET.values():
+                    if self.verbose_level >= 0:
+                        if packet_type == self.PACKET["HANDSHAKE"]:
+                            self.handle_handshake(packet)
+                        elif packet_type == self.PACKET["QUERY_INFO"]:
+                            self.handle_query_info(packet)
+                        elif packet_type == self.PACKET["CLIENT_DATA"]:
+                            self.handle_client_data(packet)
+                        elif packet_type == self.PACKET["ACK"]:
+                            self.handle_ack(packet)
+                        elif packet_type == self.PACKET["KEYSTROKE_DOWN"]:
+                            self.handle_keystroke(packet)
+                        elif packet_type == self.PACKET["KEYSTROKE_UP"]:
+                            # useless packet, catch and ignore
+                            pass
+                        elif packet_type == self.PACKET["KEYSTROKE_REPEAT"]:
+                            self.handle_keystroke(packet)
+                        elif packet_type == self.PACKET["CLIPBOARD"]:
+                            self.handle_clipboard(packet)
+                        elif packet_type == self.PACKET["CLIPBOARD_DATA"]:
+                            self.handle_clipboard_data(packet)
+                        elif packet_type == self.PACKET["ENTERING_SCREEN"]:
+                            self.handle_entering_screen(packet)
+                        elif packet_type == self.PACKET["LEAVING_SCREEN"]:
+                            self.handle_leaving_screen(packet)
+                        elif packet_type == self.PACKET["CLOSE_CONNECTION"]:
+                            self.handle_close(packet)
+                        elif packet_type == self.PACKET["CONNECTION_BUSY"]:
+                            self.handle_busy(packet)
+                    if self.verbose_level >= 1:
+                        if packet_type == self.PACKET["MOUSE_MOVEMENT"]:
+                            pass
+                        elif packet_type == self.PACKET["MOUSE_DOWN"]:
+                            pass
+                        elif packet_type == self.PACKET["MOUSE_UP"]:
+                            pass    
+                    if self.verbose_level >= 2:
+                        if packet_type == self.PACKET["SET_OPTIONS"]:
+                            pass
+                        elif packet_type == self.PACKET["RESET_OPTIONS"]:
+                            pass
+                        elif packet_type == self.PACKET["KEEP_ALIVE"]:
+                            pass
+                        elif packet_type == self.PACKET["NO_OPERATION"]:
+                            pass
+                        elif packet_type == self.PACKET["UNKNOWN"]:
+                            pass
+                elif self.verbose_level >= 3 and len(packet.synergy.field_names) > 0:
                     packet.synergy.pretty_print()
                     print(packet.synergy.field_names)
 
@@ -323,10 +303,10 @@ def main():
     parser.add_argument("-w", "--wrap_limit", help="The max amount of characters to print on a single line when dumping keystrokes/clipboard data.", type=int, default=200)
     parser.add_argument("-k", "--keystroke_wait_time", help="The time in seconds to wait without hearing new keystrokes before printing the dump.", type=int, default=5)
     parser.add_argument("-r", "--redundant_wait_time", help="The time in seconds to wait before printing actions which commonly contain duplicates. Longer window = less duplicates.", type=int, default=1)
-    parser.add_argument("-v", "--verbose", help="The level of verbosity, with each level adding more. Default = 0.\n0: keystrokes, clipboards, connection, and screen movement\n1: mouse movements and clicks\n2: keep alives, NOPs, unknowns, and random noisy packets")
+    parser.add_argument("-v", "--verbose", help="The level of verbosity, with each level adding more. Default = 0.\n0: keystrokes, clipboards, connection, and screen movement\n1: mouse movements and clicks\n2: keep alives, NOPs, unknowns, and random noisy packets\n3: any uncaught packets", type=int, default=0)
     args = parser.parse_args()
 
-    autolycus = Autolycus(args.interface, args.wrap_limit, args.keystroke_wait_time, args.redundant_wait_time)
+    autolycus = Autolycus(args.interface, args.wrap_limit, args.keystroke_wait_time, args.redundant_wait_time, args.verbose)
     autolycus.start()
 
 if __name__ == "__main__":
