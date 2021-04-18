@@ -4,6 +4,7 @@ import sys
 import logging
 import time
 import re
+import os
 from threading import Thread
 from collections import defaultdict
 from textwrap import wrap
@@ -13,7 +14,7 @@ from contextlib import suppress
 
 
 class Autolycus(object):
-    __slots__ = ["interface", "wrap_limit", "keystroke_wait_time", "redundant_wait_time", "verbose_level", "capture", "log", "active_connections", "temp_keystrokes", "temp_clipboard", "processing_clipboard", "processing_entering", "processing_leaving", "processing_keep_alive", "processing_unknown", "processing_nop"]
+    __slots__ = ["interface", "wrap_limit", "keystroke_wait_time", "redundant_wait_time", "verbose_level", "log_filename", "disable_logging", "capture", "log", "active_connections", "temp_keystrokes", "temp_clipboard", "processing_clipboard", "processing_entering", "processing_leaving", "processing_keep_alive", "processing_unknown", "processing_nop"]
 
     # packet type constants
     PACKET = {
@@ -92,12 +93,14 @@ class Autolycus(object):
     INFO = 9
     CLOSE = 10
 
-    def __init__(self, interface, wrap_limit, keystroke_wait_time, redundant_wait_time, verbose_level):
+    def __init__(self, interface, wrap_limit, keystroke_wait_time, redundant_wait_time, verbose_level, log_filename, disable_logging):
         self.interface = interface
         self.wrap_limit = wrap_limit
         self.keystroke_wait_time = keystroke_wait_time
         self.redundant_wait_time = redundant_wait_time
         self.verbose_level = verbose_level
+        self.log_filename = log_filename
+        self.disable_logging = disable_logging
         self.capture = pyshark.LiveCapture(interface=interface, bpf_filter="tcp")
         self.log = self.setup_logger()
         self.active_connections = set()
@@ -193,7 +196,7 @@ class Autolycus(object):
 
     def handle_set_options(self, packet):
         self.log.log(self.SETUP, f"({packet.ip.src} --> {packet.ip.dst}) set options:")
-        self.log.log(self.DATA, f"\t {packet.synergy.setoptions}")\
+        self.log.log(self.DATA, f"\t {packet.synergy.setoptions}")
 
     def handle_reset_options(self, packet):
         self.log.log(self.SETUP, f"({packet.ip.src} --> {packet.ip.dst}) reset options")
@@ -327,6 +330,10 @@ class Autolycus(object):
         print("*" * BANNER_WIDTH)
 
     def setup_logger(self):
+        if not self.disable_logging:
+            if not os.path.exists("logs"):
+                os.makedirs("logs");
+            logging.basicConfig(filename=f"logs/{self.log_filename}.log")
         logging.addLevelName(self.HDSHK, "HDSHK")
         logging.addLevelName(self.SETUP, "SETUP")
         logging.addLevelName(self.DATA, "DATA")
@@ -346,7 +353,7 @@ class Autolycus(object):
                 'CLOSE': 'green',
             }
         )
-        logger = logging.getLogger('example')
+        logger = logging.getLogger()
         handler = logging.StreamHandler()
         handler.setFormatter(formatter)
         logger.addHandler(handler)
@@ -360,10 +367,12 @@ def main():
     parser.add_argument("-w", "--wrap_limit", help="The max amount of characters to print on a single line when dumping keystrokes/clipboard data.", metavar="num chars", type=int, default=200)
     parser.add_argument("-k", "--keystroke_wait_time", help="The time in seconds to wait without hearing new keystrokes before printing the dump.", metavar="seconds", type=int, default=5)
     parser.add_argument("-r", "--redundant_wait_time", help="The time in seconds to wait before printing actions which commonly contain duplicates. Longer window = less duplicates.", metavar="seconds", type=int, default=1)
-    parser.add_argument("-v", "--verbose", help="The level of verbosity, with each level adding more. Default = 0.\n0: keystrokes, clipboards, connection, and screen movement\n1: mouse clicks\n2: keep alives, unknowns, and random noisy packets\n3:mouse movement and NOPs\n4: any uncaught packets", metavar="level", type=int, default=0)
+    parser.add_argument("-v", "--verbose", help="The level of verbosity, with each level adding more. Default = 0.\n0: keystrokes, clipboards, connection, and screen movement\n1: mouse clicks\n2: keep alives, unknowns, and random noisy packets\n3: mouse movement and NOPs\n4: any uncaught packets", metavar="level", type=int, default=0)
+    parser.add_argument("-l", "--log_filename", help="The filename to log to. Default = YYYYMNDD-HHMMSS", type=str, default=time.strftime("%Y%m%d-%H%M%S"))
+    parser.add_argument("-d", "--disable_logging", help="Prevent logging to a file. Will overwrite -l.", action="store_true")
     args = parser.parse_args()
 
-    autolycus = Autolycus(args.interface, args.wrap_limit, args.keystroke_wait_time, args.redundant_wait_time, args.verbose)
+    autolycus = Autolycus(args.interface, args.wrap_limit, args.keystroke_wait_time, args.redundant_wait_time, args.verbose, args.log_filename, args.disable_logging)
     autolycus.start()
 
 
