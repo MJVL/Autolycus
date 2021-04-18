@@ -10,7 +10,6 @@ from collections import defaultdict
 from textwrap import wrap
 from fabulous import text
 from colorlog import ColoredFormatter
-from contextlib import suppress
 
 
 class Autolycus(object):
@@ -22,8 +21,8 @@ class Autolycus(object):
         "HANDSHAKE": "handshake",
         "QUERY_INFO": "qinf",
         "CLIENT_DATA": "clientdata",
-        "SET_OPTIONS": "setoptions",
         "RESET_OPTIONS": "resetoptions",
+        "SET_OPTIONS": "setoptions",
         "ACK": "ack", 
         "KEYSTROKE_DOWN": "keypressed",
         "KEYSTROKE_UP": "keyreleased",
@@ -131,10 +130,10 @@ class Autolycus(object):
                             self.handle_query_info(packet)
                         elif packet_type == self.PACKET["CLIENT_DATA"]:
                             self.handle_client_data(packet)
-                        elif packet_type == self.PACKET["SET_OPTIONS"]:
-                            self.handle_set_options(packet)
                         elif packet_type == self.PACKET["RESET_OPTIONS"]:
                             self.handle_reset_options(packet)
+                        elif packet_type == self.PACKET["SET_OPTIONS"]:
+                            self.handle_set_options(packet)
                         elif packet_type == self.PACKET["ACK"]:
                             self.handle_ack(packet)
                         elif packet_type == self.PACKET["KEYSTROKE_DOWN"]:
@@ -172,7 +171,7 @@ class Autolycus(object):
                             self.handle_mouse_movement(packet)
                         elif packet_type == self.PACKET["NO_OPERATION"]:
                             self.handle_nop(packet)
-                elif self.verbose_level >= 4 and len(packet.synergy.field_names) > 0:
+                elif len(packet.synergy.field_names) > 0: #self.verbose_level >= 4 and len(packet.synergy.field_names) > 0:
                     packet.synergy.pretty_print()
                     print(packet.synergy.field_names)
 
@@ -194,12 +193,12 @@ class Autolycus(object):
         for field in packet.synergy._get_all_fields_with_alternates()[1:]:
             self.log.log(self.SETUP, f"\t{packet.synergy._get_field_repr(field)}")
 
+    def handle_reset_options(self, packet):
+        self.log.log(self.SETUP, f"({packet.ip.src} --> {packet.ip.dst}) reset options")
+
     def handle_set_options(self, packet):
         self.log.log(self.SETUP, f"({packet.ip.src} --> {packet.ip.dst}) set options:")
         self.log.log(self.DATA, f"\t {packet.synergy.setoptions}")
-
-    def handle_reset_options(self, packet):
-        self.log.log(self.SETUP, f"({packet.ip.src} --> {packet.ip.dst}) reset options")
 
     def handle_ack(self, packet):
         self.log.log(self.SETUP, f"({packet.ip.src} --> {packet.ip.dst}) acknowledged sent settings")
@@ -230,7 +229,7 @@ class Autolycus(object):
                 wait -= 1
             time.sleep(1)
         self.log.log(self.INFO, f"({src} --> {dst}) collected keystrokes:")
-        [self.log.log(self.DATA, f"\t{batch}") for batch in wrap(''.join(self.temp_keystrokes[src + dst]), self.wrap_limit)]
+        [self.log.log(self.DATA, f"\t{batch}") for batch in wrap("".join(self.temp_keystrokes[src + dst]), self.wrap_limit)]
         self.temp_keystrokes[src + dst].clear()
 
     def handle_clipboard(self, packet):
@@ -250,7 +249,7 @@ class Autolycus(object):
             if clipboard and len(clipboard) > 3 and not clipboard[:3].isnumeric() and clipboard != self.temp_clipboard:
                 self.temp_clipboard = clipboard
                 self.log.log(self.INFO, f"({packet.ip.src} --> {packet.ip.dst}) transferring clipboard data:")
-                [self.log.log(self.DATA, f"\t{batch}") for batch in wrap(''.join(f"{clipboard}"), self.wrap_limit)]
+                [self.log.log(self.DATA, f"\t{batch}") for batch in wrap("".join(f"{clipboard}"), self.wrap_limit)]
         except UnicodeDecodeError: pass
 
     def handle_entering_screen(self, packet):
@@ -297,7 +296,7 @@ class Autolycus(object):
         self.log.log(self.INFO, f"({packet.ip.src} --> {packet.ip.dst}) keep alive")
 
     def handle_unknown(self, packet):
-         if not self.processing_unknown:
+        if not self.processing_unknown:
             self.processing_unknown = True
             Thread(target=self.unknown_listener, args=(packet,)).start()
 
@@ -325,8 +324,8 @@ class Autolycus(object):
         print("*" * BANNER_WIDTH)
         print(text.Text("Autolycus", color="#EF9C70", shadow=True, skew=3))
         print("*" * BANNER_WIDTH)
-        print("Author: Michael Van Leeuwen".center(BANNER_WIDTH, ' '))
-        print("github.com/MJVL/Autolycus".center(BANNER_WIDTH, ' '))
+        print("Author: Michael Van Leeuwen".center(BANNER_WIDTH, " "))
+        print("github.com/MJVL/Autolycus".center(BANNER_WIDTH, " "))
         print("*" * BANNER_WIDTH)
 
     def setup_logger(self):
@@ -345,12 +344,12 @@ class Autolycus(object):
             datefmt="%H:%M:%S",
             reset=True,
             log_colors={
-                'INFO': 'green',
-                'HDSHK': 'green',
-                'SETUP': 'green',
-                'DATA': 'green',
-                'CONN': 'green',
-                'CLOSE': 'green',
+                "INFO": "green",
+                "HDSHK": "green",
+                "SETUP": "green",
+                "DATA": "green",
+                "CONN": "green",
+                "CLOSE": "green",
             }
         )
         logger = logging.getLogger()
