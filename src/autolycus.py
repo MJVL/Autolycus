@@ -178,12 +178,12 @@ class Autolycus(object):
     def handle_handshake(self, packet):
         self.active_connections.add(packet.ip.src)
         self.log.log(self.HDSHK, f"({packet.ip.src} --> {packet.ip.dst}) establishing connection")
-        self.log.log(self.HDSHK, f"\tVersion: Synergy v{packet.synergy.handshake_majorversion}.{packet.synergy.handshake_minorversion}")
+        self.log.log(self.DATA, f"\tVersion: Synergy v{packet.synergy.handshake_majorversion}.{packet.synergy.handshake_minorversion}")
         if ({packet.ip.src, packet.ip.dst}.issubset(self.active_connections)):
             self.log.log(self.HDSHK, f"({packet.ip.src} <-> {packet.ip.dst}) connection established")
-            self.log.log(self.HDSHK, f"\tServer: {packet.ip.dst}")
+            self.log.log(self.DATA, f"\tServer: {packet.ip.dst}")
             extras = f", hostname: {packet.synergy.handshake_client}" if "handshake_client" in packet.synergy.field_names else ""
-            self.log.log(self.HDSHK, f"\tClient: {packet.ip.src}{extras}")
+            self.log.log(self.DATA, f"\tClient: {packet.ip.src}{extras}")
 
     def handle_query_info(self, packet):
         self.log.log(self.SETUP, f"({packet.ip.src} --> {packet.ip.dst}) requesting screen settings")
@@ -191,7 +191,7 @@ class Autolycus(object):
     def handle_client_data(self, packet):
         self.log.log(self.SETUP, f"({packet.ip.src} --> {packet.ip.dst}) confirming server screen settings")
         for field in packet.synergy._get_all_fields_with_alternates()[1:]:
-            self.log.log(self.SETUP, f"\t{packet.synergy._get_field_repr(field)}")
+            self.log.log(self.DATA, f"\t{packet.synergy._get_field_repr(field)}")
 
     def handle_reset_options(self, packet):
         self.log.log(self.SETUP, f"({packet.ip.src} --> {packet.ip.dst}) reset options")
