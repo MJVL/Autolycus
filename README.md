@@ -2,7 +2,6 @@
 
 A proof of concept keylogger for the Synergy application/protocol.
 
-
 ## Requirements
 
 * Python >= 3.6
@@ -44,3 +43,10 @@ optional arguments:
   -d, --disable_logging
                         Prevent logging to a file. Will overwrite -l.
 ```
+
+## Planned Features
+* Cleaning output upon exit
+  * Pyshark has known and unresolved issues related to clean exiting
+* MITM proof of concept
+* pcap input and output
+* Full keyboard support

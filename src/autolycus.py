@@ -332,7 +332,7 @@ class Autolycus(object):
     def setup_logger(self):
         if not self.disable_logging:
             if not os.path.exists("logs"):
-                os.makedirs("logs");
+                os.makedirs("logs")
             logging.basicConfig(filename=f"logs/{self.log_filename}.log")
         logging.addLevelName(self.HDSHK, "HDSHK")
         logging.addLevelName(self.SETUP, "SETUP")
