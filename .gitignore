@@ -1,4 +1,11 @@
+# app-specific
 logs
+
+# setup tools
 dist
 build
 *.egg-info
+
+# mac
+.DS_Store
+._*
