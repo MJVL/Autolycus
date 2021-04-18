@@ -10,12 +10,13 @@ A proof of concept keylogger for the Synergy application/protocol.
 
 ## Installation
 
-`python -m pip install -r requirements.txt`
+`python setup.py install`
 
 ## Usage
 
 ```
-usage: autolycus.py [-h] [-w num chars] [-k seconds] [-r seconds] [-v level]
+usage: autolycus [-h] [-w num chars] [-k seconds] [-r seconds] [-v level]
+                    [-l LOG_FILENAME] [-d]
                     interface
 
 A proof of concept keylogger for the Synergy application/protocol.
@@ -36,6 +37,10 @@ optional arguments:
                         0: keystrokes, clipboards, connection, and screen movement
                         1: mouse clicks
                         2: keep alives, unknowns, and random noisy packets
-                        3:mouse movement and NOPs
+                        3: mouse movement and NOPs
                         4: any uncaught packets
+  -l LOG_FILENAME, --log_filename LOG_FILENAME
+                        The filename to log to. Default = YYYYMNDD-HHMMSS
+  -d, --disable_logging
+                        Prevent logging to a file. Will overwrite -l.
 ```
