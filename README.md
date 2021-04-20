@@ -5,11 +5,19 @@ A proof of concept keylogger for the Synergy application/protocol.
 ## Requirements
 
 * Python >= 3.6
-* tshark
+* TShark
 
 ## Installation
 
 `python setup.py install`
+
+## Docker
+
+Don't feel like installing TShark? Simply build the docker image and then run like so:
+
+`docker run -it a autolycus -h`
+
+Note that you'll need to play around with networking options such that your docker image can sniff on the network/interface of your choice.
 
 ## Usage
 

@@ -15,5 +15,3 @@ COPY setup.py .
 COPY README.md .
 
 RUN python3 setup.py install
-
-CMD ["autolycus", "-h"]
