@@ -45,7 +45,7 @@ optional arguments:
 ```
 
 ## Planned Features
-* Cleaning output upon exit
+* Cleaning output more reliably upon exit
   * Pyshark has known and unresolved issues related to clean exiting
 * MITM proof of concept
 * pcap input and output

@@ -5,6 +5,7 @@ import logging
 import time
 import re
 import os
+import socket
 from threading import Thread
 from collections import defaultdict
 from textwrap import wrap
@@ -13,7 +14,7 @@ from colorlog import ColoredFormatter
 
 
 class Autolycus(object):
-    __slots__ = ["interface", "wrap_limit", "keystroke_wait_time", "redundant_wait_time", "verbose_level", "log_filename", "disable_logging", "capture", "log", "active_connections", "temp_keystrokes", "temp_clipboard", "processing_clipboard", "processing_entering", "processing_leaving", "processing_keep_alive", "processing_unknown", "processing_nop"]
+    __slots__ = ["interface", "wrap_limit", "keystroke_wait_time", "redundant_wait_time", "verbose_level", "log_filename", "disable_logging", "capture", "log", "active_connections", "capturing", "temp_keystrokes", "temp_clipboard", "processing_clipboard", "processing_entering", "processing_leaving", "processing_keep_alive", "processing_unknown", "processing_nop"]
 
     # packet type constants
     PACKET = {
@@ -109,71 +110,86 @@ class Autolycus(object):
 
     def start(self):
         self.print_banner()
+        self.log.info(f"Logging activity to logs/{self.log_filename}.log")
         self.log.info("Listening for events...")
         self.listen_loop()
 
     def listen_loop(self):
-        for packet in self.capture.sniff_continuously():
-            if "Synergy" in packet and len(packet.synergy.field_names) > 0:
-                packet_type = packet.synergy.field_names[0]
+        self.capturing = True
+        try:
+            for packet in self.capture.sniff_continuously():
+                if "Synergy" in packet and len(packet.synergy.field_names) > 0:
+                    if not self.capturing:
+                        self.capture.close()
 
-                if packet.ip.src not in self.active_connections and packet.ip.dst not in self.active_connections:
-                    self.active_connections.add(packet.ip.src)
-                    self.active_connections.add(packet.ip.dst)
-                    self.log.log(self.CONN, f"({packet.ip.dst} <-> {packet.ip.src}) discovered ongoing session")
+                    packet_type = packet.synergy.field_names[0]
 
-                if packet_type in self.PACKET.values():
-                    if self.verbose_level >= 0:
-                        if packet_type == self.PACKET["HANDSHAKE"]:
-                            self.handle_handshake(packet)
-                        elif packet_type == self.PACKET["QUERY_INFO"]:
-                            self.handle_query_info(packet)
-                        elif packet_type == self.PACKET["CLIENT_DATA"]:
-                            self.handle_client_data(packet)
-                        elif packet_type == self.PACKET["RESET_OPTIONS"]:
-                            self.handle_reset_options(packet)
-                        elif packet_type == self.PACKET["SET_OPTIONS"]:
-                            self.handle_set_options(packet)
-                        elif packet_type == self.PACKET["ACK"]:
-                            self.handle_ack(packet)
-                        elif packet_type == self.PACKET["KEYSTROKE_DOWN"]:
-                            self.handle_keystroke(packet)
-                        elif packet_type == self.PACKET["KEYSTROKE_UP"]:
-                            # redundant packet, catch and ignore
-                            pass
-                        elif packet_type == self.PACKET["KEYSTROKE_REPEAT"]:
-                            self.handle_keystroke(packet)
-                        elif packet_type == self.PACKET["CLIPBOARD"]:
-                            self.handle_clipboard(packet)
-                        elif packet_type == self.PACKET["CLIPBOARD_DATA"]:
-                            self.handle_clipboard_data(packet)
-                        elif packet_type == self.PACKET["ENTERING_SCREEN"]:
-                            self.handle_entering_screen(packet)
-                        elif packet_type == self.PACKET["LEAVING_SCREEN"]:
-                            self.handle_leaving_screen(packet)
-                        elif packet_type == self.PACKET["CLOSE_CONNECTION"]:
-                            self.handle_close(packet)
-                        elif packet_type == self.PACKET["CONNECTION_BUSY"]:
-                            self.handle_busy(packet)
-                    if self.verbose_level >= 1:
-                        if packet_type == self.PACKET["MOUSE_DOWN"]:
-                            self.handle_mouse_down(packet)
-                        elif packet_type == self.PACKET["MOUSE_UP"]:
-                            # redundant packet, catch and ignore
-                            pass
-                    if self.verbose_level >= 2:
-                        if packet_type == self.PACKET["KEEP_ALIVE"]:
-                            self.handle_keep_alive(packet)
-                        elif packet_type == self.PACKET["UNKNOWN"]:
-                            self.handle_unknown(packet)
-                    if self.verbose_level >= 3:
-                        if packet_type == self.PACKET["MOUSE_MOVEMENT"]:
-                            self.handle_mouse_movement(packet)
-                        elif packet_type == self.PACKET["NO_OPERATION"]:
-                            self.handle_nop(packet)
-                elif len(packet.synergy.field_names) > 0: #self.verbose_level >= 4 and len(packet.synergy.field_names) > 0:
-                    packet.synergy.pretty_print()
-                    print(packet.synergy.field_names)
+                    if packet.ip.src not in self.active_connections and packet.ip.dst not in self.active_connections:
+                        self.active_connections.add(packet.ip.src)
+                        self.active_connections.add(packet.ip.dst)
+                        self.log.log(self.CONN, f"({packet.ip.dst} <-> {packet.ip.src}) discovered ongoing session")
+
+                    if packet_type in self.PACKET.values():
+                        if self.verbose_level >= 0:
+                            if packet_type == self.PACKET["HANDSHAKE"]:
+                                self.handle_handshake(packet)
+                            elif packet_type == self.PACKET["QUERY_INFO"]:
+                                self.handle_query_info(packet)
+                            elif packet_type == self.PACKET["CLIENT_DATA"]:
+                                self.handle_client_data(packet)
+                            elif packet_type == self.PACKET["RESET_OPTIONS"]:
+                                self.handle_reset_options(packet)
+                            elif packet_type == self.PACKET["SET_OPTIONS"]:
+                                self.handle_set_options(packet)
+                            elif packet_type == self.PACKET["ACK"]:
+                                self.handle_ack(packet)
+                            elif packet_type == self.PACKET["KEYSTROKE_DOWN"]:
+                                self.handle_keystroke(packet)
+                            elif packet_type == self.PACKET["KEYSTROKE_UP"]:
+                                # redundant packet, catch and ignore
+                                pass
+                            elif packet_type == self.PACKET["KEYSTROKE_REPEAT"]:
+                                self.handle_keystroke(packet)
+                            elif packet_type == self.PACKET["CLIPBOARD"]:
+                                self.handle_clipboard(packet)
+                            elif packet_type == self.PACKET["CLIPBOARD_DATA"]:
+                                self.handle_clipboard_data(packet)
+                            elif packet_type == self.PACKET["ENTERING_SCREEN"]:
+                                self.handle_entering_screen(packet)
+                            elif packet_type == self.PACKET["LEAVING_SCREEN"]:
+                                self.handle_leaving_screen(packet)
+                            elif packet_type == self.PACKET["CLOSE_CONNECTION"]:
+                                self.handle_close(packet)
+                            elif packet_type == self.PACKET["CONNECTION_BUSY"]:
+                                self.handle_busy(packet)
+                        if self.verbose_level >= 1:
+                            if packet_type == self.PACKET["MOUSE_DOWN"]:
+                                self.handle_mouse_down(packet)
+                            elif packet_type == self.PACKET["MOUSE_UP"]:
+                                # redundant packet, catch and ignore
+                                pass
+                        if self.verbose_level >= 2:
+                            if packet_type == self.PACKET["KEEP_ALIVE"]:
+                                self.handle_keep_alive(packet)
+                            elif packet_type == self.PACKET["UNKNOWN"]:
+                                self.handle_unknown(packet)
+                        if self.verbose_level >= 3:
+                            if packet_type == self.PACKET["MOUSE_MOVEMENT"]:
+                                self.handle_mouse_movement(packet)
+                            elif packet_type == self.PACKET["NO_OPERATION"]:
+                                self.handle_nop(packet)
+                    elif self.verbose_level >= 4 and len(packet.synergy.field_names) > 0:
+                        packet.synergy.pretty_print()
+                        print(packet.synergy.field_names)
+        except Exception: pass
+
+    def stop(self):
+        self.capturing = False
+        time.sleep(1)
+        # send a packet to break pyshark out of its loop
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.sendto(b"", ("127.0.0.1", 12345))
+        sock.close()
 
     def handle_handshake(self, packet):
         self.active_connections.add(packet.ip.src)
@@ -371,9 +387,11 @@ def main():
     parser.add_argument("-d", "--disable_logging", help="Prevent logging to a file. Will overwrite -l.", action="store_true")
     args = parser.parse_args()
 
-    autolycus = Autolycus(args.interface, args.wrap_limit, args.keystroke_wait_time, args.redundant_wait_time, args.verbose, args.log_filename, args.disable_logging)
-    autolycus.start()
-
+    try:
+        autolycus = Autolycus(args.interface, args.wrap_limit, args.keystroke_wait_time, args.redundant_wait_time, args.verbose, args.log_filename, args.disable_logging)
+        autolycus.start()
+    except KeyboardInterrupt:
+        autolycus.stop()
 
 if __name__ == "__main__":
     main()
