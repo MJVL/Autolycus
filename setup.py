@@ -12,7 +12,8 @@ setup(
         "pyshark",
         "argparse",
         "colorlog",
-        "fabulous"
+        "fabulous",
+        "pillow",
     ],
     entry_points = {
         "console_scripts": [
