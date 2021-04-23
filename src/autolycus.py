@@ -124,26 +124,20 @@ class Autolycus(object):
 
                     packet_type = packet.synergy.field_names[0]
 
-                    if packet.ip.src not in self.active_connections and packet.ip.dst not in self.active_connections:
-                        self.active_connections.add(packet.ip.src)
-                        self.active_connections.add(packet.ip.dst)
-                        self.log.log(self.CONN, f"({packet.ip.dst} <-> {packet.ip.src}) discovered ongoing session")
-
                     if packet_type in self.PACKET.values():
                         if self.verbose_level >= 0:
-                            if packet.ip.src not in self.active_connections and packet.ip.dst not in self.active_connections:
-                                if packet_type == self.PACKET["HANDSHAKE"]:
-                                    self.handle_handshake(packet)
-                                elif packet_type == self.PACKET["QUERY_INFO"]:
-                                    self.handle_query_info(packet)
-                                elif packet_type == self.PACKET["CLIENT_DATA"]:
-                                    self.handle_client_data(packet)
-                                elif packet_type == self.PACKET["RESET_OPTIONS"]:
-                                    self.handle_reset_options(packet)
-                                elif packet_type == self.PACKET["SET_OPTIONS"]:
-                                    self.handle_set_options(packet)
-                                elif packet_type == self.PACKET["ACK"]:
-                                    self.handle_ack(packet)
+                            if packet_type == self.PACKET["HANDSHAKE"]:
+                                self.handle_handshake(packet)
+                            elif packet_type == self.PACKET["QUERY_INFO"]:
+                                self.handle_query_info(packet)
+                            elif packet_type == self.PACKET["CLIENT_DATA"]:
+                                self.handle_client_data(packet)
+                            elif packet_type == self.PACKET["RESET_OPTIONS"]:
+                                self.handle_reset_options(packet)
+                            elif packet_type == self.PACKET["SET_OPTIONS"]:
+                                self.handle_set_options(packet)
+                            elif packet_type == self.PACKET["ACK"]:
+                                self.handle_ack(packet)
                             elif packet_type == self.PACKET["KEYSTROKE_DOWN"]:
                                 self.handle_keystroke(packet)
                             elif packet_type == self.PACKET["KEYSTROKE_UP"]:
@@ -182,6 +176,12 @@ class Autolycus(object):
                     elif self.verbose_level >= 4 and len(packet.synergy.field_names) > 0:
                         packet.synergy.pretty_print()
                         print(packet.synergy.field_names)
+                    
+                    if packet.ip.src not in self.active_connections and packet.ip.dst not in self.active_connections:
+                        self.active_connections.add(packet.ip.src)
+                        self.active_connections.add(packet.ip.dst)
+                        self.log.log(self.CONN, f"({packet.ip.dst} <-> {packet.ip.src}) discovered ongoing session")
+                
         except Exception: pass
 
     def stop(self):
