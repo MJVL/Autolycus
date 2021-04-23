@@ -131,18 +131,19 @@ class Autolycus(object):
 
                     if packet_type in self.PACKET.values():
                         if self.verbose_level >= 0:
-                            if packet_type == self.PACKET["HANDSHAKE"]:
-                                self.handle_handshake(packet)
-                            elif packet_type == self.PACKET["QUERY_INFO"]:
-                                self.handle_query_info(packet)
-                            elif packet_type == self.PACKET["CLIENT_DATA"]:
-                                self.handle_client_data(packet)
-                            elif packet_type == self.PACKET["RESET_OPTIONS"]:
-                                self.handle_reset_options(packet)
-                            elif packet_type == self.PACKET["SET_OPTIONS"]:
-                                self.handle_set_options(packet)
-                            elif packet_type == self.PACKET["ACK"]:
-                                self.handle_ack(packet)
+                            if packet.ip.src not in self.active_connections and packet.ip.dst not in self.active_connections:
+                                if packet_type == self.PACKET["HANDSHAKE"]:
+                                    self.handle_handshake(packet)
+                                elif packet_type == self.PACKET["QUERY_INFO"]:
+                                    self.handle_query_info(packet)
+                                elif packet_type == self.PACKET["CLIENT_DATA"]:
+                                    self.handle_client_data(packet)
+                                elif packet_type == self.PACKET["RESET_OPTIONS"]:
+                                    self.handle_reset_options(packet)
+                                elif packet_type == self.PACKET["SET_OPTIONS"]:
+                                    self.handle_set_options(packet)
+                                elif packet_type == self.PACKET["ACK"]:
+                                    self.handle_ack(packet)
                             elif packet_type == self.PACKET["KEYSTROKE_DOWN"]:
                                 self.handle_keystroke(packet)
                             elif packet_type == self.PACKET["KEYSTROKE_UP"]:
